@@ -130,7 +130,7 @@ we retrained some models, so it's different from the origin paper
 size = 300
 
 |ssd_vgg|ssd_res|ssd_darknet|drf_ssd_vgg|drf_ssd_res|refine_drf_vgg|refine_ssd_vgg| 
-|:-:      |:-:      |:-:          |:-:          |:-:          |:-:|:-:  |          |
+|:-:      |:-:      |:-:          |:-:          |:-:          |:-:|:-:   |          
 | 77.5%   | 77.0    | 77.6%       | 79.6 %      | 79.0%       |80.2% |80.4 %        |
 
 
