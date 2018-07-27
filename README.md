@@ -1,5 +1,5 @@
 # SSD Pytorch
-A [PyTorch](http://pytorch.org/) implementation of SSDs (include origin ssd, DRFNet, RefineDet)
+A [PyTorch](http://pytorch.org/) implementation of SSDs (include original ssd, DRFNet, RefineDet)
 
 <!-- <img align="right" src= "https://github.com/amdegroot/ssd.pytorch/blob/master/doc/ssd.png" height = 400/> -->
 
