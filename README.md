@@ -106,7 +106,7 @@ python train.py -v ssd_vgg
     * -v choose backbone version, ssd_vgg, ssd_res, ssd_darknet, drf_ssd_vgg, drf_ssd_res, refine_ssd_vgg
     * s: image size, 300 or 512
     * You can pick-up training from a checkpoint by specifying the path as one of the training parameters (again, see train.py for options)
-  
+    * learning rate: ssd_vgg, ssd_res, ssd_darknet 0.001, drf_ssd_vgg, drf_ssd_res 0.004, refine_ssd_vgg 0.002
 - To evaluate a trained network:
 
 ```Shell

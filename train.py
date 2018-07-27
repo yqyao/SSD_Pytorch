@@ -43,9 +43,10 @@ def arg_parse():
     parser.add_argument('--confidence_threshold', default=0.01, type=float,
                         help='Detection confidence threshold')
     parser.add_argument('--lr', '--learning-rate',
-                        default=4e-3, type=float, help='initial learning rate')
+                        default=1e-3, type=float, help='initial learning rate')
     parser.add_argument('--ngpu', default=2, type=int, help='gpus')
-
+    parser.add_argument('--warmup', default=True,
+                        type=bool, help='use warmup or not')
     parser.add_argument('--resume_net', default=None, help='resume net for retraining')
     parser.add_argument('--resume_epoch', default=0,
                         type=int, help='resume iter for retraining')
@@ -67,16 +68,19 @@ def adjust_learning_rate(optimizer, epoch, step_epoch, gamma, epoch_size, iterat
     # https://github.com/pytorch/examples/blob/master/imagenet/main.py
     """
     ## warmup
-    if epoch < 3:
-        iteration += iteration * epoch
-        lr = 1e-6 + (args.lr - 1e-6) * iteration / (epoch_size * 3) 
+    if epoch <= 2:
+        if args.warmup:
+            iteration += iteration * epoch
+            lr = 1e-6 + (args.lr - 1e-6) * iteration / (epoch_size * 2) 
+        else:
+            lr = args.lr
     else:
         div = 0
-        if epoch >= step_epoch[-1]:
+        if epoch > step_epoch[-1]:
             div = len(step_epoch) - 1
         else:
             for idx, v in enumerate(step_epoch):
-                if epoch >= step_epoch[idx] and epoch < step_epoch[idx+1]:
+                if epoch > step_epoch[idx] and epoch <= step_epoch[idx+1]:
                     div = idx 
                     break
         lr = args.lr * (gamma ** div)
@@ -281,7 +285,7 @@ def main():
     #                              collate_fn=detection_collate)
 
 
-    for epoch in range(start_epoch, end_epoch):
+    for epoch in range(start_epoch+1, end_epoch+1):
         train_dataset = trainvalDataset(dataroot, datasets_dict[dataset_name], TrainTransform, targetTransform, dataset_name)
         epoch_size = len(train_dataset)
         train_loader = data.DataLoader(train_dataset,
