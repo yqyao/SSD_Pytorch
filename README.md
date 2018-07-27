@@ -21,12 +21,13 @@ A [PyTorch](http://pytorch.org/) implementation of SSDs (include original ssd, D
 - Clone this repository.
   * Note: We currently only support Python 3+.
 - Then download the dataset by following the [instructions](#download-voc2007-trainval--test) below.
-- Compile the nms and coco tools:
+- Compile the nms and install coco tools:
 
 ```shell
 cd SSD_Pytorch
 # if you use anaconda3, maybe you need https://github.com/rbgirshick/py-faster-rcnn/issues/706
 ./make.sh
+pip install pycocotools
 
 ```
 
