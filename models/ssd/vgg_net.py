@@ -72,7 +72,7 @@ class SSD(nn.Module):
         other, ext = os.path.splitext(base_file)
         if ext == '.pkl' or '.pth':
             print('Loading weights into state dict...')
-            self.extractor.load_state_dict(torch.load(base_file), strict=False)
+            self.extractor.vgg.load_state_dict(torch.load(base_file), strict=False)
             print("initing vgg ssd")
             self.extractor.extras.apply(weights_init)
             self.loc.apply(weights_init)
