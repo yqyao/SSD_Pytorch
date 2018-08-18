@@ -22,7 +22,8 @@ pretrained_model = {
         "drf_vgg" : "./weights/pretrained_models/vgg16_reducedfc.pth",
         "drf_res" : "./weights/pretrained_models/resnet101-5d3b4d8f.pth",
         "refine_ssd_res" : "./weights/pretrained_models/resnet101-5d3b4d8f.pth",
-        "refine_ssd_vgg" : "./weights/pretrained_models/vgg16_reducedfc.pth",
+        # "refine_ssd_vgg" : "./weights/pretrained_models/vgg16_reducedfc.pth",
+        "refine_ssd_vgg" : "./weights/pretrained_models/vgg16_best_feature.pth",
         "refine_drf_vgg" : "./weights/pretrained_models/vgg16_reducedfc.pth",
         "refine_drf_res" : "./weights/pretrained_models/resnet101-5d3b4d8f.pth",}
 

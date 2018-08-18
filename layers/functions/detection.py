@@ -51,36 +51,18 @@ class Detect(Function):
         num = loc_data.size(0)  # batch size
         self.num_priors = prior_data.size(0)
 
-        self.boxes = torch.zeros(1, self.num_priors, 4)
-        self.scores = torch.zeros(1, self.num_priors, self.num_classes)
-
-        if num == 1:
-            # size batch x num_classes x num_priors
-            conf_preds = conf_data.unsqueeze(0)
-
+        self.boxes = torch.zeros(num, self.num_priors, 4)
+        self.scores = torch.zeros(num, self.num_priors, self.num_classes)
+        conf_preds = conf_data.view(num, self.num_priors, self.num_classes)
+        batch_prior = prior_data.view(-1, self.num_priors, 4).expand((num, self.num_priors, 4))
+        batch_prior = batch_prior.contiguous().view(-1, 4)
+        if self.use_arm:
+            default = decode(arm_loc_data.view(-1, 4), batch_prior, self.variance)
+            default = center_size(default)
+            decoded_boxes = decode(loc_data.view(-1, 4), default, self.variance)
         else:
-            conf_preds = conf_data.view(num, num_priors,
-                                        self.num_classes)
-            self.boxes.expand_(num, self.num_priors, 4)
-            self.scores.expand_(num, self.num_priors, self.num_classes)
+            decoded_boxes = decode(loc_data.view(-1, 4), batch_prior, self.variance)
 
-        # Decode predictions into bboxes.
-        for i in range(num):
-            if self.use_arm:
-                default = decode(arm_loc_data[i], prior_data, self.variance)
-                default = center_size(default)
-                decoded_boxes = decode(loc_data[i], default, self.variance)
-            else:
-                decoded_boxes = decode(loc_data[i], prior_data, self.variance)
-            # For each class, perform nms
-            conf_scores = conf_preds[i].clone()
-            '''
-            c_mask = conf_scores.gt(self.thresh)
-            decoded_boxes = decoded_boxes[c_mask]
-            conf_scores = conf_scores[c_mask]
-            '''
-
-            self.boxes[i] = decoded_boxes
-            self.scores[i] = conf_scores
-
+        self.scores = conf_preds.view(num, self.num_priors, self.num_classes)
+        self.boxes = decoded_boxes.view(num, self.num_priors, 4)
         return self.boxes, self.scores

@@ -241,13 +241,12 @@ class BaseTransform(object):
         self.swap = swap
 
     # assume input is cv2 img for now
-    def __call__(self, img):
+    def __call__(self, img, target=None):
 
         interp_methods = [cv2.INTER_LINEAR, cv2.INTER_CUBIC, cv2.INTER_AREA, cv2.INTER_NEAREST, cv2.INTER_LANCZOS4]
         interp_method = interp_methods[0]
         img = cv2.resize(np.array(img), (self.resize_wh[0],
                                          self.resize_wh[1]),interpolation = interp_method).astype(np.float32)
         img -= self.means
-        # img = img[:, :, (2, 1, 0)]
         img = img.transpose(self.swap)
-        return torch.from_numpy(img)
+        return torch.from_numpy(img), target

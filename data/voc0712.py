@@ -117,9 +117,8 @@ class VOCDetection(data.Dataset):
                 self.ids.append((rootpath, line.strip()))
  
     def __getitem__(self, index):
-        im, gt = self.pull_item(index)
-
-        return im, gt
+        im, gt, img_info = self.pull_item(index)
+        return im, gt, img_info
 
     def __len__(self):
         return len(self.ids)
@@ -133,7 +132,7 @@ class VOCDetection(data.Dataset):
             target = np.zeros((1,5))
         img = cv2.imread(self._imgpath % img_id)
         im_h, im_w, channels = img.shape
-
+        img_info = [im_w, im_h]
         if self.target_transform is not None:
             target = self.target_transform(target, im_w, im_h)
 
@@ -144,7 +143,7 @@ class VOCDetection(data.Dataset):
             if self.transform is not None:
                 img = self.transform(img)
 
-        return img, target
+        return img, target, img_info
 
     def pull_image(self, index):
         '''Returns the original image object at index in PIL form
@@ -292,8 +291,10 @@ def detection_collate(batch):
     """
     targets = []
     imgs = []
+    img_info = []
     for sample in batch:
         imgs.append(sample[0])
         targets.append(torch.FloatTensor(sample[1]))
-    return torch.stack(imgs, 0), targets
+        img_info.append(torch.FloatTensor(sample[2]))
+    return torch.stack(imgs, 0), targets, img_info
 

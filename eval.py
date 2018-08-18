@@ -31,10 +31,14 @@ def arg_parse():
                         help='300 or 512 input size.')
     parser.add_argument('-d', '--dataset', default='VOC',
                         help='VOC ,VOC0712++ or COCO dataset')
+    parser.add_argument('-b', '--batch_size', default=32,
+                        type=int, help='Batch size for training')
     parser.add_argument('-c', '--channel_size', default='48',
                         help='channel_size 32_1, 32_2, 48, 64, 96, 128')
     parser.add_argument('--save_folder', default='eval/', type=str,
                         help='File path to save results')
+    parser.add_argument('--num_workers', default=8,
+                        type=int, help='Number of workers used in dataloading')
     parser.add_argument('--confidence_threshold', default=0.01, type=float,
                         help='Detection confidence threshold')
     parser.add_argument('--top_k', default=200, type=int,
@@ -45,7 +49,7 @@ def arg_parse():
     args = parser.parse_args()
     return args
 
-def eval_net(val_dataset, net, detector, cfg, transform, max_per_image=300, thresh=0.01):
+def eval_net(val_dataset, val_loader, net, detector, cfg, transform, max_per_image=300, thresh=0.01, batch_size=1):
     net.eval()
     num_images = len(val_dataset)
     num_classes = cfg['num_classes']
@@ -65,65 +69,50 @@ def eval_net(val_dataset, net, detector, cfg, transform, max_per_image=300, thre
         val_dataset.evaluate_detections(all_boxes, eval_save_folder)
         return
 
-    for i in range(num_images):
+    for idx, (imgs, _, img_info) in enumerate(val_loader):
         with torch.no_grad():
-            t0 = time.time()
-            img = val_dataset.pull_image(i)
-            w, h = img.shape[1], img.shape[0]
-            x = transform(img).unsqueeze(0)
-            x = x.cuda()
             t1 = time.time()
+            x = imgs
+            x = x.cuda()
             output = net(x)
-            boxes, scores = detector.forward(output)
-            detect_time = _t['im_detect'].toc()
-            t2 = time.time()
-            boxes = boxes[0]
-            scores = scores[0]
-            boxes = boxes.cpu().numpy()
-            scores = scores.cpu().numpy()
-            # scale each detection back up to the image
-            scale = np.array([w, h, w, h])
-            boxes *= scale
-            t3 = time.time()
-            for j in range(1, num_classes):
-                inds = np.where(scores[:, j] > thresh)[0]
-                if len(inds) == 0:
-                    all_boxes[j][i] = np.empty([0, 5], dtype=np.float32)
-                    continue
-                c_bboxes = boxes[inds]
-                c_scores = scores[inds, j]
-                c_dets = np.hstack((c_bboxes, c_scores[:, np.newaxis])).astype(
-                    np.float32, copy=False)
-                keep = nms(c_dets, 0.45, force_cpu=True)
-                keep = keep[:50]
-                c_dets = c_dets[keep, :]
-                all_boxes[j][i] = c_dets
-            if max_per_image > 0:
-                image_scores = np.hstack([all_boxes[j][i][:, -1] for j in range(1,num_classes)])
-                if len(image_scores) > max_per_image:
-                    image_thresh = np.sort(image_scores)[-max_per_image]
-                    for j in range(1, num_classes):
-                        keep = np.where(all_boxes[j][i][:, -1] >= image_thresh)[0]
-                        all_boxes[j][i] = all_boxes[j][i][keep, :]
-            nms_time = _t['misc'].toc()
             t4 = time.time()
-        read_time = round(t1 - t0, 3)
-        detect_time = round(t2 - t1, 3)
-        copy_time = round(t3 - t2, 3)
-        nms_time = round(t4- t3, 3)
-        all_time = round(t4 - t0, 3)
+            boxes, scores = detector.forward(output)
+            t2 = time.time()
+            for k in range(boxes.size(0)):
+                i = idx * batch_size + k
+                boxes_ = boxes[k]
+                scores_ = scores[k]
+                boxes_ = boxes_.cpu().numpy()
+                scores_ = scores_.cpu().numpy()
+                img_wh = img_info[k]
+                scale = np.array([img_wh[0], img_wh[1], img_wh[0], img_wh[1]])
+                boxes_ *= scale
+                for j in range(1, num_classes):
+                    inds = np.where(scores_[:, j] > thresh)[0]
+                    if len(inds) == 0:
+                        all_boxes[j][i] = np.empty([0, 5], dtype=np.float32)
+                        continue
+                    c_bboxes = boxes_[inds]
+                    c_scores = scores_[inds, j]
+                    c_dets = np.hstack((c_bboxes, c_scores[:, np.newaxis])).astype(
+                        np.float32, copy=False)
+                    keep = nms(c_dets, 0.45, force_cpu=True)
+                    keep = keep[:50]
+                    c_dets = c_dets[keep, :]
+                    all_boxes[j][i] = c_dets
+            t3 = time.time()
+            detect_time = t2 - t1
+            nms_time = t3 - t2
+            forward_time = t4 - t1
+            if idx % 10 == 0:
+                print('im_detect: {:d}/{:d} {:.3f}s {:.3f}s {:.3f}s'
+                    .format(i + 1, num_images, forward_time, detect_time, nms_time))
 
-        if i % 20 == 0:
-            info = "{}/{} | read_t: {}s |det_t: {}s | copy_t: {}s | nms_t: {}s | all_t: {}s".format(str(i+1), str(num_images), read_time, detect_time, copy_time, nms_time, all_time)
-            print(info)
-        if i == 0:
-            begin = time.time()
-    print("detect all time", time.time() - begin)
     with open(det_file, 'wb') as f:
         pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
     print('Evaluating detections')
     val_dataset.evaluate_detections(all_boxes, eval_save_folder)
-
+    print("detect time: ", time.time() - st)
 
 def main():
     global args
@@ -132,6 +121,8 @@ def main():
     dataset_name = args.dataset
     size = args.size
     use_refine = False
+    batch_size = args.batch_size
+    num_workers = args.num_workers
     if args.version.split("_")[0] == "refine":
         use_refine = True
     if dataset_name[0] == "V":
@@ -169,10 +160,15 @@ def main():
     net.load_state_dict(new_state_dict)
     detector = Detect(num_classes, 0, cfg, use_arm=use_refine)
     ValTransform = BaseTransform(cfg["img_wh"], bgr_means, (2, 0, 1))
-    val_dataset = trainvalDataset(dataroot, valSet, ValTransform, targetTransform, "test")
+    val_dataset = trainvalDataset(dataroot, valSet, ValTransform, targetTransform, "val")
+    val_loader = data.DataLoader(val_dataset,
+                                 batch_size,
+                                 shuffle=False,
+                                 num_workers=num_workers,
+                                 collate_fn=detection_collate)
     top_k = 300
     thresh = 0.01
-    eval_net(val_dataset, net, detector, cfg, ValTransform, top_k, thresh=thresh)
+    eval_net(val_dataset, val_loader, net, detector, cfg, ValTransform, top_k, thresh=thresh, batch_size=batch_size)
 
 if __name__ == '__main__':
     st = time.time()

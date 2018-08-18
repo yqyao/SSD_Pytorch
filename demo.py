@@ -52,7 +52,7 @@ def im_detect(img, net, detector, cfg, transform, thresh=0.01):
     with torch.no_grad():
         t0 = time.time()
         w, h = img.shape[1], img.shape[0]
-        x = transform(img).unsqueeze(0)
+        x = transform(img)[0].unsqueeze(0)
         x = x.cuda()
         t1 = time.time()
         output = net(x)
