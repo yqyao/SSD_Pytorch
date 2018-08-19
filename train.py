@@ -139,8 +139,7 @@ def eval_net(val_dataset, val_loader, net, detector, cfg, transform, max_per_ima
     all_boxes = [[[] for _ in range(num_images)]
                  for _ in range(num_classes)]
     det_file = os.path.join(eval_save_folder, 'detections.pkl')
-    _t = {'im_detect': Timer(), 'misc': Timer()}
-
+    st = time.time()
     for idx, (imgs, _, img_info) in enumerate(val_loader):
         with torch.no_grad():
             t1 = time.time()
@@ -290,7 +289,6 @@ def main():
             eval_net(val_dataset, val_loader, net, detector, cfg, ValTransform, top_k, thresh=thresh, batch_size=batch_size)
     eval_net(val_dataset, val_loader, net, detector, cfg, ValTransform, top_k, thresh=thresh, batch_size=batch_size)
     save_checkpoint(net, end_epoch, size)
-
 if __name__ == '__main__':
     main()
 

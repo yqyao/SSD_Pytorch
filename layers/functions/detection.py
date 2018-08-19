@@ -46,9 +46,11 @@ class Detect(Function):
             conf = F.softmax(conf.view(-1, self.num_classes), 1)  
         loc_data = loc.data
         conf_data = conf.data
-        prior_data = priors.data
+        # prior_data = priors.data
+        prior_data = priors[:loc_data.size(1), :]
 
         num = loc_data.size(0)  # batch size
+
         self.num_priors = prior_data.size(0)
 
         self.boxes = torch.zeros(num, self.num_priors, 4)
