@@ -203,8 +203,11 @@ def voc_eval(detpath,
     # if classname == 'person':
     final_rec = round(rec[-1], 4)
     final_prec = round(prec[-1], 4)
+    plt_save_path = os.path.join(".", "eval", "pr")
+    if not os.path.exists(plt_save_path):
+        os.makedirs(plt_save_path)
     plt.plot(rec, prec, 'r')
-    pr_curl = os.path.join("./eval/pr", '{}_{}_{}pr.jpg'.format(classname, str(final_prec), str(final_rec)))
+    pr_curl = os.path.join(plt_save_path, '{}_{}_{}pr.jpg'.format(classname, str(final_prec), str(final_rec)))
     plt.savefig(pr_curl)
     plt.close()
     ap = voc_ap(rec, prec, use_07_metric)
