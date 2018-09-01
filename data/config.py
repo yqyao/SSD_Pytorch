@@ -22,8 +22,8 @@ pretrained_model = {
         "drf_vgg" : "./weights/pretrained_models/vgg16_reducedfc.pth",
         "drf_res" : "./weights/pretrained_models/resnet101-5d3b4d8f.pth",
         "refine_ssd_res" : "./weights/pretrained_models/resnet101-5d3b4d8f.pth",
-        # "refine_ssd_vgg" : "./weights/pretrained_models/vgg16_reducedfc.pth",
-        "refine_ssd_vgg" : "./weights/pretrained_models/vgg16_best_feature.pth",
+        "refine_ssd_vgg" : "./weights/pretrained_models/vgg16_reducedfc.pth",
+        # "refine_ssd_vgg" : "./weights/pretrained_models/vgg16_best_feature.pth",
         "refine_drf_vgg" : "./weights/pretrained_models/vgg16_reducedfc.pth",
         "refine_drf_res" : "./weights/pretrained_models/resnet101-5d3b4d8f.pth",}
 
@@ -103,7 +103,8 @@ Refine_VOC = {
     "512" : {
             'feature_maps' : [(64, 64), (32, 32), (16, 16), (8, 8), (4, 4)],
             'min_dim' : 512,
-            'in_channels_vgg': (512, 1024, 256, 256, 256),
+            'arm_channels': (512, 1024, 256, 256, 256),
+            'odm_channels' : (256, 256, 256, 256, 256),
             'num_anchors': (3, 3, 3, 3, 3),
             'steps' : [(8, 8), (16, 16), (32, 32), (64, 64), (128, 128)],
             'min_sizes' : [32, 64, 128, 256, 384],

@@ -43,7 +43,7 @@ def arg_parse():
     parser.add_argument('--confidence_threshold', default=0.01, type=float,
                         help='Detection confidence threshold')
     parser.add_argument('--lr', '--learning-rate',
-                        default=1e-3, type=float, help='initial learning rate')
+                        default=2e-3, type=float, help='initial learning rate')
     parser.add_argument('--ngpu', default=2, type=int, help='gpus')
     parser.add_argument('--warmup', default=True,
                         type=bool, help='use warmup or not')
@@ -285,7 +285,7 @@ def main():
         train(train_loader, net, criterion, optimizer, epoch, epoch_step, gamma, use_refine)
         if (epoch % 10 == 0) or (epoch % 5 == 0 and epoch >= 200):
             save_checkpoint(net, epoch, size)
-        if (epoch >= 200 and epoch % 10 == 0):
+        if (epoch >= 150 and epoch % 10 == 0):
             eval_net(val_dataset, val_loader, net, detector, cfg, ValTransform, top_k, thresh=thresh, batch_size=batch_size)
     eval_net(val_dataset, val_loader, net, detector, cfg, ValTransform, top_k, thresh=thresh, batch_size=batch_size)
     save_checkpoint(net, end_epoch, size)
