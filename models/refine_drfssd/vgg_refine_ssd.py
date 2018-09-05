@@ -68,9 +68,9 @@ def add_extras(size):
     layers += [nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1)]
     layers += [nn.Conv2d(256, 128, kernel_size=1, stride=1)]
     layers += [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
-    if size == '512':
-        layers += [nn.Conv2d(256, 128, kernel_size=1, stride=1)]
-        layers += [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
+    # if size == '512':
+    #     layers += [nn.Conv2d(256, 128, kernel_size=1, stride=1)]
+    #     layers += [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
 
     return layers
 
@@ -92,25 +92,25 @@ def trans_layers(size):
     layers += [nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1,           padding=1),
                 nn.ReLU(inplace=True),
                 nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1))]
-    if size == "512":
-        layers += [nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1,           padding=1),
-                    nn.ReLU(inplace=True),
-                    nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1))]
+    # if size == "512":
+        # layers += [nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1,           padding=1),
+        #             nn.ReLU(inplace=True),
+        #             nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1))]
 
     return layers
 
 def latent_layers(size):
     layers = []
-    if size == "512":
-        layers += [nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)]
+    # if size == "512":
+        # layers += [nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)]
     for i in range(3):
         layers += [nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)]
     return layers
 
 def up_layers(size):
     layers = []
-    if size == "512":
-        layers += [nn.ConvTranspose2d(256, 256, kernel_size=2, stride=2, padding=0)]
+    # if size == "512":
+        # layers += [nn.ConvTranspose2d(256, 256, kernel_size=2, stride=2, padding=0)]
     for i in range(3):
         layers += [nn.ConvTranspose2d(256, 256, kernel_size=2, stride=2, padding=0)]
     return layers
