@@ -104,7 +104,7 @@ python train.py --cfg ./configs/ssd_vgg_voc.yaml
 ```
 
 - Note:
-  all configs are in sd_vgg_voc.yaml
+  All training configs are in ssd_vgg_voc.yaml, you can change it by yourself.
 
 - To evaluate a trained network:
 
