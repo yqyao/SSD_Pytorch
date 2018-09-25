@@ -37,22 +37,28 @@ class RefineMultiBoxLoss(nn.Module):
         See: https://arxiv.org/pdf/1512.02325.pdf for more details.
     """
 
-    def __init__(self, num_classes, overlap_thresh, prior_for_matching,
-                 bkg_label, neg_mining, neg_pos, neg_overlap, encode_target, object_score = 0,use_gpu=True):
+    def __init__(self, cfg, num_classes):
         super(RefineMultiBoxLoss, self).__init__()
-        self.use_gpu = use_gpu
+        self.cfg = cfg
+        self.size = cfg.MODEL.SIZE
+        if self.size == '300':
+            size_cfg = cfg.SMALL
+        else:
+            size_cfg = cfg.BIG
+        self.variance = size_cfg.VARIANCE
         self.num_classes = num_classes
-        self.threshold = overlap_thresh
-        self.background_label = bkg_label
-        self.encode_target = encode_target
-        self.use_prior_for_matching = prior_for_matching
-        self.do_neg_mining = neg_mining
-        self.negpos_ratio = neg_pos
-        self.neg_overlap = neg_overlap
-        self.object_score = object_score
-        self.variance = [0.1,0.2] #cfg['variance']
+        self.threshold = cfg.TRAIN.OVERLAP
+        self.OHEM = cfg.TRAIN.OHEM
+        self.negpos_ratio = cfg.TRAIN.NEG_RATIO
+        self.object_score = cfg.MODEL.OBJECT_SCORE
+        self.variance = size_cfg.VARIANCE
+        if cfg.TRAIN.FOCAL_LOSS:
+            if cfg.TRAIN.FOCAL_LOSS_TYPE == 'SOFTMAX':
+                self.focaloss = FocalLossSoftmax(self.num_classes, gamma=2, size_average=False)
+            else:
+                self.focaloss = FocalLossSigmoid()
 
-    def forward(self, predictions, targets, use_arm=False, filter_object=False, filter_score=0, debug=False):
+    def forward(self, predictions, targets, use_arm=False, filter_object=False,debug=False):
         """Multibox Loss
         Args:
             predictions (tuple): A tuple containing loc preds, conf preds,
@@ -81,7 +87,6 @@ class RefineMultiBoxLoss(nn.Module):
         for idx in range(num):
             truths = targets[idx][:, :-1].data
             labels = targets[idx][:, -1].data
-
             if self.num_classes == 2:
                 labels = labels > 0
             if use_arm:
@@ -89,10 +94,9 @@ class RefineMultiBoxLoss(nn.Module):
             else:                
                 match(self.threshold, truths, defaults, self.variance, labels,
                   loc_t, conf_t, idx)
-                
-        if self.use_gpu:
-            loc_t = loc_t.cuda()
-            conf_t = conf_t.cuda()
+
+        loc_t = loc_t.cuda()
+        conf_t = conf_t.cuda()
         # wrap targets
         loc_t = Variable(loc_t, requires_grad=False)
         conf_t = Variable(conf_t, requires_grad=False)
@@ -120,30 +124,31 @@ class RefineMultiBoxLoss(nn.Module):
                 print("arm pos num", str(loc_t.size(0)), str(loc_t.size(1)))
 
         loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
+        if self.OHEM:
+            # Compute max conf across batch for hard negative mining
+            batch_conf = conf_data.view(-1, self.num_classes)
 
-        # Compute max conf across batch for hard negative mining
-        batch_conf = conf_data.view(-1, self.num_classes)
+            loss_c = log_sum_exp(batch_conf) - batch_conf.gather(1, conf_t.view(-1, 1))
 
-        loss_c = log_sum_exp(batch_conf) - batch_conf.gather(1, conf_t.view(-1, 1))
+            # Hard Negative Mining
+            loss_c[pos.view(-1, 1)] = 0  # filter out pos boxes for now
+            loss_c = loss_c.view(num, -1)
+            _, loss_idx = loss_c.sort(1, descending=True)
+            _, idx_rank = loss_idx.sort(1)
+            num_pos = pos.long().sum(1, keepdim=True)
+            num_neg = torch.clamp(self.negpos_ratio*num_pos, max=pos.size(1)-1)
+            neg = idx_rank < num_neg.expand_as(idx_rank)
 
-        # Hard Negative Mining
-        loss_c[pos.view(-1, 1)] = 0  # filter out pos boxes for now
-        loss_c = loss_c.view(num, -1)
-        _, loss_idx = loss_c.sort(1, descending=True)
-        _, idx_rank = loss_idx.sort(1)
-        num_pos = pos.long().sum(1, keepdim=True)
-        num_neg = torch.clamp(self.negpos_ratio*num_pos, max=pos.size(1)-1)
-        neg = idx_rank < num_neg.expand_as(idx_rank)
+            # Confidence Loss Including Positive and Negative Examples
+            pos_idx = pos.unsqueeze(2).expand_as(conf_data)
+            neg_idx = neg.unsqueeze(2).expand_as(conf_data)
 
-        # Confidence Loss Including Positive and Negative Examples
-        pos_idx = pos.unsqueeze(2).expand_as(conf_data)
-        neg_idx = neg.unsqueeze(2).expand_as(conf_data)
+            conf_p = conf_data[(pos_idx+neg_idx).gt(0)].view(-1, self.num_classes)
 
-        conf_p = conf_data[(pos_idx+neg_idx).gt(0)].view(-1, self.num_classes)
-
-        targets_weighted = conf_t[(pos+neg).gt(0)]
-        loss_c = F.cross_entropy(conf_p, targets_weighted, size_average=False)
-
+            targets_weighted = conf_t[(pos+neg).gt(0)]
+            loss_c = F.cross_entropy(conf_p, targets_weighted, size_average=False)
+        else:
+            loss_c = F.cross_entropy(conf_p, conf_t, size_average=False)
         N = num_pos.data.sum()
         loss_l /= float(N)
         loss_c /= float(N)

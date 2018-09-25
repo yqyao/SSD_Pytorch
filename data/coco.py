@@ -80,13 +80,12 @@ class COCODetection(data.Dataset):
             (default: 'VOC2007')
     """
 
-    def __init__(self, root, image_sets, transform=None, target_transform=None,
+    def __init__(self, root, image_sets, transform=None,
                  dataset_name='COCO'):
         self.root = root
         self.cache_path = os.path.join(self.root, 'cache')
         self.image_set = image_sets
         self.transform = transform
-        self.target_transform = target_transform
         self.name = dataset_name
         self.ids = list()
         self.annotations = list()

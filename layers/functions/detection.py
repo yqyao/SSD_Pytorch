@@ -12,14 +12,18 @@ class Detect(Function):
     scores and threshold to a top_k number of output predictions for both
     confidence score and locations.
     """
-    def __init__(self, num_classes, bkg_label, cfg, use_arm=False, object_score=0):
-        self.num_classes = num_classes
-        self.background_label = bkg_label
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.num_classes = cfg.MODEL.NUM_CLASSES
         #self.thresh = thresh
-        self.use_arm = use_arm
+        self.size = cfg.MODEL.SIZE
+        if self.size == '300':
+            size_cfg = cfg.SMALL
+        else:
+            size_cfg = cfg.BIG
         # Parameters used in nms.
-        self.variance = cfg['variance']
-        self.object_score = object_score
+        self.variance = size_cfg.VARIANCE
+        self.object_score = cfg.MODEL.OBJECT_SCORE
 
     def forward(self, predictions):
         """
@@ -32,14 +36,14 @@ class Detect(Function):
                 Shape: [1,num_priors,4]
         """
         # loc, conf, priors = predictions
-        if self.use_arm:
+        if self.cfg.MODEL.REFINE:
             arm_loc, arm_conf, loc, conf, priors = predictions
             arm_conf = F.softmax(arm_conf.view(-1, 2), 1)
             conf = F.softmax(conf.view(-1, self.num_classes), 1)
             arm_loc_data = arm_loc.data
             arm_conf_data = arm_conf.data
             arm_object_conf = arm_conf_data[:, 1:]
-            no_object_index = arm_object_conf <= 0.01 # self.object_score
+            no_object_index = arm_object_conf <= self.object_score
             conf.data[no_object_index.expand_as(conf.data)] = 0
         else:
             loc, conf, priors = predictions
@@ -58,7 +62,7 @@ class Detect(Function):
         conf_preds = conf_data.view(num, self.num_priors, self.num_classes)
         batch_prior = prior_data.view(-1, self.num_priors, 4).expand((num, self.num_priors, 4))
         batch_prior = batch_prior.contiguous().view(-1, 4)
-        if self.use_arm:
+        if self.cfg.MODEL.REFINE:
             default = decode(arm_loc_data.view(-1, 4), batch_prior, self.variance)
             default = center_size(default)
             decoded_boxes = decode(loc_data.view(-1, 4), default, self.variance)

@@ -100,12 +100,12 @@ class VOCDetection(data.Dataset):
             (default: 'VOC2007')
     """
 
-    def __init__(self, root, image_sets, transform=None, target_transform=None,
+    def __init__(self, root, image_sets, transform=None,
                  dataset_name='VOC0712'):
         self.root = root
         self.image_set = image_sets
         self.transform = transform
-        self.target_transform = target_transform
+        self.target_transform = AnnotationTransform()
         self.name = dataset_name
         self._annopath = os.path.join('%s', 'Annotations', '%s.xml')
         self._imgpath = os.path.join('%s', 'JPEGImages', '%s.jpg')

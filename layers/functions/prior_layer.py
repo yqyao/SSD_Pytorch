@@ -8,22 +8,22 @@ class PriorLayer(nn.Module):
 
     def __init__(self, cfg):
         super(PriorLayer, self).__init__()
-        # self.type = cfg.name
-        self.image_size = cfg['img_wh']
-        self.num_priors = len(cfg['aspect_ratios'])
-        self.feature_maps = cfg["feature_maps"]
-        self.use_extra_prior = cfg['use_extra_prior']
-        self.variance = cfg['variance'] or [0.1]
-        self.min_sizes = cfg['min_sizes']
-        self.use_max_sizes = cfg["use_max_sizes"]
-        if cfg["use_max_sizes"]:
-            self.max_sizes = cfg['max_sizes']
-        self.steps = cfg['steps']
-        self.aspect_ratios = cfg['aspect_ratios']
-        self.clip = cfg['clip']
-        if self.use_extra_prior:
-            self.aspect_ratios = cfg['aspect_ratios_extra']
-            print("use extra prior")
+        self.size = cfg.MODEL.SIZE
+        if self.size == '300':
+            size_cfg = cfg.SMALL
+        else:
+            size_cfg = cfg.BIG
+        self.img_wh = size_cfg.IMG_WH
+        self.num_priors = len(size_cfg.ASPECT_RATIOS)
+        self.feature_maps = size_cfg.FEATURE_MAPS
+        self.variance = size_cfg.VARIANCE or [0.1]
+        self.min_sizes = size_cfg.MIN_SIZES
+        self.use_max_sizes = size_cfg.USE_MAX_SIZE
+        if self.use_max_sizes:
+            self.max_sizes = size_cfg.MAX_SIZES
+        self.steps = size_cfg.STEPS
+        self.aspect_ratios = size_cfg.ASPECT_RATIOS
+        self.clip = size_cfg.CLIP
         for v in self.variance:
             if v <= 0:
                 raise ValueError('Variances must be greater than 0')

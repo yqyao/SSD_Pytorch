@@ -8,55 +8,33 @@ import torch.nn.init as init
 import argparse
 from torch.autograd import Variable
 import torch.utils.data as data
-from data import VOCroot, COCOroot, VOC, COCO, AnnotationTransform, COCODetection, VOCDetection, detection_collate, BaseTransform, VOC_CLASSES, preproc, model_builder, pretrained_model, datasets_dict, cfg_dict
+from data import COCODetection, VOCDetection, detection_collate, BaseTransform, preproc
 from layers.modules import MultiBoxLoss, RefineMultiBoxLoss
 from layers.functions import Detect
 from utils.nms_wrapper import nms, soft_nms
+from configs.config import cfg, cfg_from_file
 import numpy as np
 import time
 import os 
 import sys
 import pickle
-
+import datetime
+from models.model_builder import SSD
+import yaml
 
 def arg_parse():
     parser = argparse.ArgumentParser(
-        description='Receptive Field Block Net Training')
-    parser.add_argument('-v', '--version', default='ssd_vgg',
-                        help='')
-    parser.add_argument('-s', '--size', default='300',
-                        help='300 or 512 input size.')
-    parser.add_argument('-d', '--dataset', default='VOC',
-                        help='VOC or COCO dataset')
-    parser.add_argument('-c', '--channel_size', default='48',
-                        help='channel_size')
+        description='SSD Training')
     parser.add_argument(
-        '--basenet', default='./weights/convert_darknet53.pth', help='pretrained base model')
-    parser.add_argument('--jaccard_threshold', default=0.5,
-                        type=float, help='Min Jaccard index for matching')
-    parser.add_argument('-b', '--batch_size', default=32,
-                        type=int, help='Batch size for training')
+        '--cfg', dest='cfg_file', required=True,
+        help='Config file for training (and optionally testing)')
     parser.add_argument('--num_workers', default=8,
                         type=int, help='Number of workers used in dataloading')
-    parser.add_argument('--cuda', default=True,
-                        type=bool, help='Use cuda to train model')
-    parser.add_argument('--confidence_threshold', default=0.01, type=float,
-                        help='Detection confidence threshold')
-    parser.add_argument('--lr', '--learning-rate',
-                        default=2e-3, type=float, help='initial learning rate')
     parser.add_argument('--ngpu', default=2, type=int, help='gpus')
-    parser.add_argument('--warmup', default=True,
-                        type=bool, help='use warmup or not')
     parser.add_argument('--resume_net', default=None, help='resume net for retraining')
     parser.add_argument('--resume_epoch', default=0,
                         type=int, help='resume iter for retraining')
-    parser.add_argument('-max','--max_epoch', default=250,
-                        type=int, help='max epoch for retraining')
-    parser.add_argument('--visdom', default=False, help='Use visdom to for loss visualization')
-    parser.add_argument('--send_images_to_visdom', default=False, help='Sample a random image from each 10th batch, send it to visdom after augmentations step')
 
-    parser.add_argument('--log_iters', default=True,
-                        type=bool, help='Print the loss at each iteration')
     parser.add_argument('--save_folder', default='./weights/',
                         help='Location to save checkpoint models')
     args = parser.parse_args()
@@ -68,12 +46,12 @@ def adjust_learning_rate(optimizer, epoch, step_epoch, gamma, epoch_size, iterat
     # https://github.com/pytorch/examples/blob/master/imagenet/main.py
     """
     ## warmup
-    if epoch <= 2:
-        if args.warmup:
-            iteration += iteration * epoch
-            lr = 1e-6 + (args.lr - 1e-6) * iteration / (epoch_size * 2) 
+    if epoch <= cfg.TRAIN.WARMUP_EPOCH:
+        if cfg.TRAIN.WARMUP:
+            iteration += (epoch_size * (epoch - 1))
+            lr = 1e-6 + (cfg.SOLVER.BASE_LR - 1e-6) * iteration / (epoch_size * cfg.TRAIN.WARMUP_EPOCH) 
         else:
-            lr = args.lr
+            lr = cfg.SOLVER.BASE_LR
     else:
         div = 0
         if epoch > step_epoch[-1]:
@@ -83,13 +61,13 @@ def adjust_learning_rate(optimizer, epoch, step_epoch, gamma, epoch_size, iterat
                 if epoch > step_epoch[idx] and epoch <= step_epoch[idx+1]:
                     div = idx 
                     break
-        lr = args.lr * (gamma ** div)
+        lr = acfg.SOLVER.BASE_LR * (gamma ** div)
 
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     return lr
 
-def train(train_loader, net, criterion, optimizer, epoch, epoch_step, gamma, use_refine=False):
+def train(train_loader, net, criterion, optimizer, epoch, epoch_step, gamma, end_epoch, cfg):
     net.train()
     begin = time.time()
     epoch_size = len(train_loader)
@@ -102,7 +80,7 @@ def train(train_loader, net, criterion, optimizer, epoch, epoch_step, gamma, use
             targets = [anno.cuda() for anno in targets]
         output = net(imgs)
         optimizer.zero_grad()
-        if not use_refine:
+        if not cfg.MODEL.REFINE:
             ssd_criterion = criterion[0]
             loss_l, loss_c = ssd_criterion(output, targets) 
             loss = loss_l + loss_c
@@ -115,24 +93,34 @@ def train(train_loader, net, criterion, optimizer, epoch, epoch_step, gamma, use
         loss.backward()
         optimizer.step()
         t1 = time.time()
+        iteration_time = t1 - t0
+        all_time = ((end_epoch - epoch) * epoch_size + (epoch_size - iteration)) * iteration_time
+        eta = str(datetime.timedelta(seconds=int(all_time)))
         if iteration % 10 == 0:
-            if not use_refine:
+            if not cfg.MODEL.REFINE:
                 print('Epoch:' + repr(epoch) + ' || epochiter: ' + repr(iteration % epoch_size) + '/' + repr(epoch_size) + ' || L: %.4f C: %.4f||' % (loss_l.item(), loss_c.item()) + 
-                'iteration time: %.4f sec. ||' % (t1 - t0) + 'LR: %.5f' % (lr))
+                'iteration time: %.4f sec. ||' % (t1 - t0) + 'LR: %.5f' % (lr)
+                + ' || eta time: {}'.format(eta))
             else:
                 print('Epoch:' + repr(epoch) + ' || epochiter: ' + repr(iteration % epoch_size) + '/' + repr(epoch_size) + 
                     '|| arm_L: %.4f arm_C: %.4f||' % (arm_loss_l.item(),arm_loss_c.item()) + ' odm_L: %.4f odm_C: %.4f||' % (odm_loss_l.item(), odm_loss_c.item()) + 
                   ' loss: %.4f||' % (loss.item()) +
-                'iteration time: %.4f sec. ||' % (t1 - t0) + 'LR: %.5f' % (lr))                
+                'iteration time: %.4f sec. ||' % (t1 - t0) + 'LR: %.5f' % (lr)
+                 + ' || eta time: {}'.format(eta))                
 
-def save_checkpoint(net, epoch, size):
-    file_name = os.path.join(args.save_folder, args.version + "epoch_{}_{}".format(str(epoch), str(size))+ '.pth')
-    torch.save(net.state_dict(), file_name)
+def save_checkpoint(net, epoch, size, optimizer):
+    save_name = os.path.join(args.save_folder, cfg.MODEL.TYPE + "_epoch_{}_{}".format(str(epoch), str(size))+ '.pth')
+    torch.save({
+        'epoch' : epoch,
+        'size' : size,
+        'batch_size': cfg.TRAIN.BATCH_SIZE,
+        'model': net.state_dict(),
+        'optimizer': optimizer.state_dict()}, save_name)
 
 def eval_net(val_dataset, val_loader, net, detector, cfg, transform, max_per_image=300, thresh=0.01, batch_size=1):
     net.eval()
     num_images = len(val_dataset)
-    num_classes = cfg['num_classes']
+    num_classes = cfg.MODEL.NUM_CLASSES
     eval_save_folder = "./eval/"
     if not os.path.exists(eval_save_folder):
         os.mkdir(eval_save_folder)
@@ -167,7 +155,7 @@ def eval_net(val_dataset, val_loader, net, detector, cfg, transform, max_per_ima
                     c_scores = scores_[inds, j]
                     c_dets = np.hstack((c_bboxes, c_scores[:, np.newaxis])).astype(
                         np.float32, copy=False)
-                    keep = nms(c_dets, 0.45, force_cpu=True)
+                    keep = nms(c_dets, cfg.TEST.NMS_OVERLAP, force_cpu=True)
                     keep = keep[:50]
                     c_dets = c_dets[keep, :]
                     all_boxes[j][i] = c_dets
@@ -185,54 +173,46 @@ def eval_net(val_dataset, val_loader, net, detector, cfg, transform, max_per_ima
     val_dataset.evaluate_detections(all_boxes, eval_save_folder)
     print("detect time: ", time.time() - st)
 
-def main():
+def main():      
     global args
     args = arg_parse()
+    cfg_from_file(args.cfg_file)  
     save_folder = args.save_folder
-    batch_size = args.batch_size
-    bgr_means = (104, 117, 123)
-    weight_decay = 0.0005
+    batch_size = cfg.TRAIN.BATCH_SIZE
+    bgr_means = cfg.TRAIN.BGR_MEAN
     p = 0.6
-    gamma = 0.1
-    momentum = 0.9
-    dataset_name = args.dataset
-    size = args.size
-    channel_size = args.channel_size
-    thresh = args.confidence_threshold
-    use_refine = False
-    if args.version.split("_")[0] == "refine":
-        use_refine = True
-    if dataset_name[0] == "V":
-        cfg = cfg_dict["VOC"][args.version][str(size)]
+    gamma = cfg.SOLVER.GAMMA
+    momentum = cfg.SOLVER.MOMENTUM
+    weight_decay = cfg.SOLVER.WEIGHT_DECAY
+    size = cfg.MODEL.SIZE
+    thresh = cfg.TEST.CONFIDENCE_THRESH
+    if cfg.DATASETS.DATA_TYPE == 'VOC':
         trainvalDataset = VOCDetection
-        dataroot = VOCroot
-        targetTransform = AnnotationTransform()
-        valSet = datasets_dict["VOC2007"]
         top_k = 200
     else:
-        cfg = cfg_dict["COCO"][args.version][str(size)]
         trainvalDataset = COCODetection
-        dataroot = COCOroot
-        targetTransform = None
-        valSet = datasets_dict["COCOval"]
         top_k = 300
-    num_classes = cfg['num_classes']
+    dataset_name = cfg.DATASETS.DATA_TYPE
+    dataroot = cfg.DATASETS.DATAROOT
+    trainSet = cfg.DATASETS.TRAIN_TYPE
+    valSet = cfg.DATASETS.VAL_TYPE
+    num_classes = cfg.MODEL.NUM_CLASSES
     start_epoch = args.resume_epoch
-    epoch_step = cfg["epoch_step"]
-    end_epoch = cfg["end_epoch"]
+    epoch_step = cfg.SOLVER.EPOCH_STEPS
+    end_epoch = cfg.SOLVER.END_EPOCH
     if not os.path.exists(save_folder):
         os.mkdir(save_folder)
-    if args.cuda and torch.cuda.is_available():
-        torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    net = SSD(cfg)
+    if cfg.MODEL.SIZE == '300':
+        size_cfg = cfg.SMALL
     else:
-        torch.set_default_tensor_type('torch.FloatTensor')
-    net = model_builder(args.version, cfg, "train", int(size), num_classes, args.channel_size)
-    print(net)
-
-    if args.resume_net == None:
-        net.load_weights(pretrained_model[args.version])
-    else:
-        state_dict = torch.load(args.resume_net)
+        size_cfg = cfg.BIG
+    optimizer = optim.SGD(net.parameters(), lr=cfg.SOLVER.BASE_LR,
+                      momentum=momentum, weight_decay=weight_decay)
+    if args.resume_net != None:
+        checkpoint = torch.load(args.resume_net)
+        state_dict = checkpoint['model']
         from collections import OrderedDict
         new_state_dict = OrderedDict()
         for k, v in state_dict.items():
@@ -243,30 +223,29 @@ def main():
                 name = k
             new_state_dict[name] = v
         net.load_state_dict(new_state_dict)
+        optimizer.load_state_dict(checkpoint['optimizer'])
         print('Loading resume network...')
     if args.ngpu > 1:
         net = torch.nn.DataParallel(net)
-    if args.cuda:
-        net.cuda()
-        cudnn.benchmark = True
-    optimizer = optim.SGD(net.parameters(), lr=args.lr,
-                      momentum=momentum, weight_decay=weight_decay)
-    criterion = list()
-    if use_refine:
-        detector = Detect(num_classes, 0, cfg, use_arm=use_refine)
-        arm_criterion = RefineMultiBoxLoss(2, 0.5, True, 0, True, 3, 0.5, False, args.cuda)
+    net.cuda()
+    cudnn.benchmark = True
 
-        odm_criterion = RefineMultiBoxLoss(num_classes, 0.5, True, 0, True, 3, 0.5, False, 0.01, args.cuda)
+    criterion = list()
+    if cfg.MODEL.REFINE:
+        detector = Detect(cfg)
+        arm_criterion = RefineMultiBoxLoss(cfg, 2)
+        odm_criterion = RefineMultiBoxLoss(cfg, cfg.MODEL.NUM_CLASSES)
         criterion.append(arm_criterion)
         criterion.append(odm_criterion)
     else:
-        detector = Detect(num_classes, 0, cfg, use_arm=use_refine)
-        ssd_criterion = MultiBoxLoss(num_classes, 0.5, True, 0, True, 3, 0.5, False, args.cuda)
+        detector = Detect(cfg)
+        ssd_criterion = MultiBoxLoss(cfg)
         criterion.append(ssd_criterion)
-    TrainTransform = preproc(cfg["img_wh"], bgr_means, p)
-    ValTransform = BaseTransform(cfg["img_wh"], bgr_means, (2, 0, 1))
 
-    val_dataset = trainvalDataset(dataroot, valSet, ValTransform, targetTransform, dataset_name)
+    TrainTransform = preproc(size_cfg.IMG_WH, bgr_means, p)
+    ValTransform = BaseTransform(size_cfg.IMG_WH, bgr_means, (2, 0, 1))
+
+    val_dataset = trainvalDataset(dataroot, valSet, ValTransform, dataset_name)
     val_loader = data.DataLoader(val_dataset,
                                  batch_size,
                                  shuffle=False,
@@ -275,20 +254,19 @@ def main():
 
 
     for epoch in range(start_epoch+1, end_epoch+1):
-        train_dataset = trainvalDataset(dataroot, datasets_dict[dataset_name], TrainTransform, targetTransform, dataset_name)
+        train_dataset = trainvalDataset(dataroot, trainSet, TrainTransform, dataset_name)
         epoch_size = len(train_dataset)
         train_loader = data.DataLoader(train_dataset,
                                         batch_size,
                                         shuffle=True,
                                         num_workers=args.num_workers,
                                         collate_fn=detection_collate)
-        train(train_loader, net, criterion, optimizer, epoch, epoch_step, gamma, use_refine)
+        train(train_loader, net, criterion, optimizer, epoch, epoch_step, gamma, end_epoch, cfg)
         if (epoch % 10 == 0) or (epoch % 5 == 0 and epoch >= 200):
-            save_checkpoint(net, epoch, size)
-        if (epoch >= 150 and epoch % 10 == 0):
+            save_checkpoint(net, epoch, size, optimizer)
+        if (epoch >= 50 and epoch % 10 == 0):
             eval_net(val_dataset, val_loader, net, detector, cfg, ValTransform, top_k, thresh=thresh, batch_size=batch_size)
-    eval_net(val_dataset, val_loader, net, detector, cfg, ValTransform, top_k, thresh=thresh, batch_size=batch_size)
-    save_checkpoint(net, end_epoch, size)
+    save_checkpoint(net, end_epoch, size, optimizer)
 if __name__ == '__main__':
     main()
 

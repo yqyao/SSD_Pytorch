@@ -1,49 +1,38 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1,0"
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
 import torch.nn.init as init
-import pickle
 import argparse
 from torch.autograd import Variable
 import torch.utils.data as data
-from data import VOCroot, COCOroot, VOC, COCO, AnnotationTransform, COCOAnnotationTransform, COCODetection, VOCDetection, detection_collate, BaseTransform, VOC_CLASSES, preproc, model_builder, pretrained_model, datasets_dict, cfg_dict
+from data import COCODetection, VOCDetection, detection_collate, BaseTransform, preproc
 from layers.modules import MultiBoxLoss, RefineMultiBoxLoss
 from layers.functions import Detect
 from utils.nms_wrapper import nms, soft_nms
+from configs.config import cfg, cfg_from_file
 import numpy as np
-from utils.timer import Timer
 import time
 import os 
 import sys
-
+import pickle
+import datetime
+from models.model_builder import SSD
+import yaml
 
 def arg_parse():
     parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
     parser.add_argument('--weights', default='weights/ssd_darknet_300.pth',
                         type=str, help='Trained state_dict file path to open')
-
-    parser.add_argument('-v', '--version', default='ssd_vgg',
-                        help='dense_ssd or origin_ssd version.')
-    parser.add_argument('-s', '--size', default='300',
-                        help='300 or 512 input size.')
-    parser.add_argument('-d', '--dataset', default='VOC',
-                        help='VOC ,VOC0712++ or COCO dataset')
-    parser.add_argument('-b', '--batch_size', default=32,
-                        type=int, help='Batch size for training')
-    parser.add_argument('-c', '--channel_size', default='48',
-                        help='channel_size 32_1, 32_2, 48, 64, 96, 128')
+    parser.add_argument(
+        '--cfg', dest='cfg_file', required=True,
+        help='Config file for training (and optionally testing)')
     parser.add_argument('--save_folder', default='eval/', type=str,
                         help='File path to save results')
     parser.add_argument('--num_workers', default=8,
                         type=int, help='Number of workers used in dataloading')
-    parser.add_argument('--confidence_threshold', default=0.01, type=float,
-                        help='Detection confidence threshold')
-    parser.add_argument('--top_k', default=200, type=int,
-                        help='Further restrict the number of predictions to parse')
-    parser.add_argument('--cuda', default=True, help='Use cuda to train model')
     parser.add_argument('--retest', default=False, type=bool,
                         help='test cache results')
     args = parser.parse_args()
@@ -52,7 +41,7 @@ def arg_parse():
 def eval_net(val_dataset, val_loader, net, detector, cfg, transform, max_per_image=300, thresh=0.01, batch_size=1):
     net.eval()
     num_images = len(val_dataset)
-    num_classes = cfg['num_classes']
+    num_classes = cfg.MODEL.NUM_CLASSES
     eval_save_folder = "./eval/"
     if not os.path.exists(eval_save_folder):
         os.mkdir(eval_save_folder)
@@ -96,7 +85,7 @@ def eval_net(val_dataset, val_loader, net, detector, cfg, transform, max_per_ima
                     c_scores = scores_[inds, j]
                     c_dets = np.hstack((c_bboxes, c_scores[:, np.newaxis])).astype(
                         np.float32, copy=False)
-                    keep = nms(c_dets, 0.45, force_cpu=True)
+                    keep = nms(c_dets, cfg.TEST.NMS_OVERLAP, force_cpu=True)
                     keep = keep[:50]
                     c_dets = c_dets[keep, :]
                     all_boxes[j][i] = c_dets
@@ -115,39 +104,34 @@ def eval_net(val_dataset, val_loader, net, detector, cfg, transform, max_per_ima
     print("detect time: ", time.time() - st)
 
 def main():
+    cfg_from_file("./configs/ssd_res50_voc.yaml")  
     global args
     args = arg_parse()
-    bgr_means = (104, 117, 123)
-    dataset_name = args.dataset
-    size = args.size
-    use_refine = False
-    batch_size = args.batch_size
+    bgr_means = cfg.TRAIN.BGR_MEAN
+    dataset_name = cfg.DATASETS.DATA_TYPE
+    batch_size = cfg.TEST.BATCH_SIZE
     num_workers = args.num_workers
-    if args.version.split("_")[0] == "refine":
-        use_refine = True
-    if dataset_name[0] == "V":
-        cfg = cfg_dict["VOC"][args.version][str(size)]
+    if cfg.DATASETS.DATA_TYPE == 'VOC':
         trainvalDataset = VOCDetection
-        dataroot = VOCroot
-        targetTransform = AnnotationTransform()
-        valSet = datasets_dict["VOC2007"]
+        top_k = 200
     else:
-        cfg = cfg_dict["COCO"][args.version][str(size)]
         trainvalDataset = COCODetection
-        dataroot = COCOroot
-        targetTransform = None
-        valSet = datasets_dict["COCOval"]
-    num_classes = cfg['num_classes']
+        top_k = 300
+
+    if cfg.MODEL.SIZE == '300':
+        size_cfg = cfg.SMALL
+    else:
+        size_cfg = cfg.BIG
+    valSet = cfg.DATASETS.VAL_TYPE
+    num_classes = cfg.MODEL.NUM_CLASSES
     save_folder = args.save_folder
     if not os.path.exists(save_folder):
         os.mkdir(save_folder)
+    torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    net = SSD(cfg)
 
-    if args.cuda and torch.cuda.is_available():
-        torch.set_default_tensor_type('torch.cuda.FloatTensor')
-    else:
-        torch.set_default_tensor_type('torch.FloatTensor')
-    net = model_builder(args.version, cfg, "test", int(size), num_classes, args.channel_size)
-    state_dict = torch.load(args.weights)
+    checkpoint = torch.load(args.resume_net)
+    state_dict = checkpoint['model']
     from collections import OrderedDict
     new_state_dict = OrderedDict()
     for k, v in state_dict.items():
@@ -158,16 +142,16 @@ def main():
             name = k
         new_state_dict[name] = v
     net.load_state_dict(new_state_dict)
-    detector = Detect(num_classes, 0, cfg, use_arm=use_refine)
-    ValTransform = BaseTransform(cfg["img_wh"], bgr_means, (2, 0, 1))
-    val_dataset = trainvalDataset(dataroot, valSet, ValTransform, targetTransform, "val")
+    detector = Detect(cfg)
+    ValTransform = BaseTransform(size_cfg.IMG_WH, bgr_means, (2, 0, 1))
+    val_dataset = trainvalDataset(dataroot, valSet, ValTransform, "val")
     val_loader = data.DataLoader(val_dataset,
                                  batch_size,
                                  shuffle=False,
                                  num_workers=num_workers,
                                  collate_fn=detection_collate)
     top_k = 300
-    thresh = 0.01
+    thresh = cfg.TEST.CONFIDENCE_THRESH
     eval_net(val_dataset, val_loader, net, detector, cfg, ValTransform, top_k, thresh=thresh, batch_size=batch_size)
 
 if __name__ == '__main__':

@@ -4,10 +4,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import models.drfssd.dense_conv
-import models.refine_drfssd.refine_dense_conv
+import models.dense_conv
 from torch.autograd import Variable
 import torch.nn.init as init
+from utils.box_utils import weights_init
 
 class L2Norm(nn.Module):
     def __init__(self, n_channels, scale):
@@ -19,7 +19,7 @@ class L2Norm(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        init.constant(self.weight, self.gamma)
+        init.constant_(self.weight, self.gamma)
 
     def forward(self, x):
         norm = x.pow(2).sum(dim=1, keepdim=True).sqrt()+self.eps
@@ -56,7 +56,6 @@ def vgg(cfg, i, batch_norm=False):
 
 
 extras_cfg = {
-    # '300': [256, 'S', 512, 128, 'S', 256],
     '300': [256, 'S', 512, 128, 'S', 256, 128, 256, 128, 256],
     '512': [256, 'S', 512, 128, 'S', 256, 128, 'S', 256, 128, 'S', 256, 128, 'S', 256],
 }
@@ -85,24 +84,6 @@ def add_extras(cfg, i, batch_norm=False):
         in_channels = v
     return layers
 
-def smooth_conv(size):
-    # Extra layers added to resnet for feature scaling
-    layers = []
-    if size == '300':
-        layers += [nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)]
-        layers += [nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)]
-        layers += [nn.Conv2d(256, 256, kernel_size=1, stride=1)]
-        layers += [nn.Conv2d(256, 256, kernel_size=1, stride=1)]
-    else:
-        layers += [nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)]
-        layers += [nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)]
-        layers += [nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)]
-        layers += [nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)]
-        layers += [nn.Conv2d(256, 256, kernel_size=1, stride=1)]
-        layers += [nn.Conv2d(256, 256, kernel_size=1, stride=1)]        
-
-    return layers
-
 
 class VGG16Extractor(nn.Module):
     def __init__(self, size, channel_size='48'):
@@ -114,16 +95,23 @@ class VGG16Extractor(nn.Module):
         self.L2Norm3 = L2Norm(1024, 10)
         self.L2Norm4 = L2Norm(512, 10)
         self.L2Norm5 = L2Norm(256, 10)
-        dense_list = models.refine_drfssd.refine_dense_conv.dense_list_vgg(channel_size, size)
-        # dense_list = models.drfssd.dense_conv.dense_list_vgg(channel_size, size)
+        dense_list = models.dense_conv.dense_list_vgg(channel_size, str(size))
         self.dense_list0 = nn.ModuleList(dense_list[0])
         self.dense_list1 = nn.ModuleList(dense_list[1])
         self.dense_list2 = nn.ModuleList(dense_list[2])
         self.dense_list3 = nn.ModuleList(dense_list[3])
         self.dense_list4 = nn.ModuleList(dense_list[4])
         self.dense_list5 = nn.ModuleList(dense_list[5])
-        self.smooth_list = nn.ModuleList(smooth_conv(str(size)))
+        self._init_modules()
 
+    def _init_modules(self):
+        self.extras.apply(weights_init)
+        self.dense_list0.apply(weights_init)
+        self.dense_list1.apply(weights_init)
+        self.dense_list2.apply(weights_init)
+        self.dense_list3.apply(weights_init)
+        self.dense_list4.apply(weights_init)
+        self.dense_list5.apply(weights_init)   
 
     def forward(self, x):
         """Applies network layers and ops on input image(s) x.
@@ -141,7 +129,7 @@ class VGG16Extractor(nn.Module):
                     2: localization layers, Shape: [batch,num_priors*4]
                     3: priorbox layers, Shape: [2,num_priors*4]
         """
-        arm_sources = list()
+
         sources = list()
         loc = list()
         conf = list()
@@ -167,14 +155,12 @@ class VGG16Extractor(nn.Module):
         #38x38
         dense2 = x
         dense2 = self.L2Norm(dense2)
-        arm_sources.append(dense2)
-        dense2 = F.relu(self.dense_list1[0](dense2), inplace=True)
-        dense2_p1 = self.dense_list1[1](dense2)
-        dense2_p2 = self.dense_list1[2](dense2_p1)
-        dense2_p3 = self.dense_list1[3](dense2_p2)
-        dense2_p1_conv = self.dense_list1[4](dense2_p1)
-        dense2_p2_conv = self.dense_list1[5](dense2_p2)
-        dense2_p3_conv = self.dense_list1[6](dense2_p3)
+        dense2_p1 = self.dense_list1[0](dense2)
+        dense2_p2 = self.dense_list1[1](dense2_p1)
+        dense2_p3 = self.dense_list1[2](dense2_p2)
+        dense2_p1_conv = self.dense_list1[3](dense2_p1)
+        dense2_p2_conv = self.dense_list1[4](dense2_p2)
+        dense2_p3_conv = self.dense_list1[5](dense2_p3)
 
         # apply vgg up to fc7
         for k in range(23, len(self.vgg)):
@@ -182,45 +168,39 @@ class VGG16Extractor(nn.Module):
 
         #19x19
         dense3 = x
-        arm_sources.append(dense3)
         dense3 = self.L2Norm3(dense3)
-        dense3 = F.relu(self.dense_list2[0](dense3), inplace=True)
-        dense3_up_conv = self.dense_list2[1](dense3)
-        dense3_up = self.dense_list2[2](dense3_up_conv)
-        dense3_p1 = self.dense_list2[3](dense3)
-        dense3_p2 = self.dense_list2[4](dense3_p1)
-        dense3_p1_conv = self.dense_list2[5](dense3_p1)
-        dense3_p2_conv = self.dense_list2[6](dense3_p2)
+        dense3_up_conv = self.dense_list2[0](dense3)
+        dense3_up = self.dense_list2[1](dense3_up_conv)
+        dense3_p1 = self.dense_list2[2](dense3)
+        dense3_p2 = self.dense_list2[3](dense3_p1)
+        dense3_p1_conv = self.dense_list2[4](dense3_p1)
+        dense3_p2_conv = self.dense_list2[5](dense3_p2)
 
         x = F.relu(self.extras[0](x), inplace=True)
         x = F.relu(self.extras[1](x), inplace=True)
 
         #10x10
         dense4 = x
-        arm_sources.append(dense4)
         dense4 = self.L2Norm4(dense4)
-        dense4 = F.relu(self.dense_list3[0](dense4), inplace=True)
-        dense4_up1_conv = self.dense_list3[1](dense4)
-        dense4_up2_conv = self.dense_list3[2](dense4)
-        dense4_up1 = self.dense_list3[3](dense4_up1_conv)
-        dense4_up2 = self.dense_list3[4](dense4_up2_conv)
-        dense4_p = self.dense_list3[5](dense4)
-        dense4_p_conv = self.dense_list3[6](dense4_p)
+        dense4_up1_conv = self.dense_list3[0](dense4)
+        dense4_up2_conv = self.dense_list3[1](dense4)
+        dense4_up1 = self.dense_list3[2](dense4_up1_conv)
+        dense4_up2 = self.dense_list3[3](dense4_up2_conv)
+        dense4_p = self.dense_list3[4](dense4)
+        dense4_p_conv = self.dense_list3[5](dense4_p)
 
         x = F.relu(self.extras[2](x), inplace=True)
         x = F.relu(self.extras[3](x), inplace=True)
 
         #5x5
         dense5 = x
-        arm_sources.append(dense5)
         dense5 = self.L2Norm5(dense5)
-        dense5 = F.relu(self.dense_list4[0](dense5), inplace=True)
-        dense5_up1_conv = self.dense_list4[1](dense5)
-        dense5_up2_conv = self.dense_list4[2](dense5)
-        dense5_up3_conv = self.dense_list4[3](dense5)
-        dense5_up1 = self.dense_list4[4](dense5_up1_conv)
-        dense5_up2 = self.dense_list4[5](dense5_up2_conv)
-        dense5_up3 = self.dense_list4[6](dense5_up3_conv)
+        dense5_up1_conv = self.dense_list4[0](dense5)
+        dense5_up2_conv = self.dense_list4[1](dense5)
+        dense5_up3_conv = self.dense_list4[2](dense5)
+        dense5_up1 = self.dense_list4[3](dense5_up1_conv)
+        dense5_up2 = self.dense_list4[4](dense5_up2_conv)
+        dense5_up3 = self.dense_list4[5](dense5_up3_conv)
 
         dense_out1 = torch.cat((dense1_p1_conv, dense2, dense3_up, dense4_up2, dense5_up3), 1)
         dense_out1 = F.relu(self.dense_list5[0](dense_out1))
@@ -243,10 +223,8 @@ class VGG16Extractor(nn.Module):
             if k > 3:
                 x= F.relu(v(x), inplace=True)
                 if k % 2 == 1:
-                    tmp = x
-                    index = k - 5
-                    tmp = self.smooth_list[index](tmp)
-                    tmp = F.relu(self.smooth_list[index+1](tmp), inplace=True)
-                    arm_sources.append(x)
-                    sources.append(tmp)
-        return arm_sources, sources
+                    sources.append(x)
+        return sources
+
+def DRFVgg(size, channel_size='48'):
+    return VGG16Extractor(size, channel_size)

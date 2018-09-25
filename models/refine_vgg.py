@@ -8,6 +8,8 @@ import models.drfssd.dense_conv
 import models.refine_drfssd.refine_dense_conv
 from torch.autograd import Variable
 import torch.nn.init as init
+from utils.box_utils import weights_init
+
 
 class L2Norm(nn.Module):
     def __init__(self, n_channels, scale):
@@ -68,9 +70,6 @@ def add_extras(size):
     layers += [nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1)]
     layers += [nn.Conv2d(256, 128, kernel_size=1, stride=1)]
     layers += [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
-    # if size == '512':
-    #     layers += [nn.Conv2d(256, 128, kernel_size=1, stride=1)]
-    #     layers += [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
 
     return layers
 
@@ -92,25 +91,17 @@ def trans_layers(size):
     layers += [nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1,           padding=1),
                 nn.ReLU(inplace=True),
                 nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1))]
-    # if size == "512":
-        # layers += [nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1,           padding=1),
-        #             nn.ReLU(inplace=True),
-        #             nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1))]
 
     return layers
 
 def latent_layers(size):
     layers = []
-    # if size == "512":
-        # layers += [nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)]
     for i in range(3):
         layers += [nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)]
     return layers
 
 def up_layers(size):
     layers = []
-    # if size == "512":
-        # layers += [nn.ConvTranspose2d(256, 256, kernel_size=2, stride=2, padding=0)]
     for i in range(3):
         layers += [nn.ConvTranspose2d(256, 256, kernel_size=2, stride=2, padding=0)]
     return layers
@@ -127,7 +118,14 @@ class VGG16Extractor(nn.Module):
         self.trans_layers = nn.ModuleList(trans_layers(str(size)))
         self.latent_layers = nn.ModuleList(latent_layers((str(size))))
         self.up_layers = nn.ModuleList(up_layers(str(size)))
+        self._init_modules()
 
+    def _init_modules(self):
+        self.extras.apply(weights_init)
+        self.last_layer_trans.apply(weights_init)
+        self.trans_layers.apply(weights_init)
+        self.latent_layers.apply(weights_init)
+        self.up_layers.apply(weights_init)
 
     def forward(self, x):
         """Applies network layers and ops on input image(s) x.
@@ -195,3 +193,6 @@ class VGG16Extractor(nn.Module):
 
         odm_sources.reverse()
         return arm_sources, odm_sources
+
+def refine_vgg(size, channel_size='48'):
+    return VGG16Extractor(size)

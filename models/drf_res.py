@@ -4,8 +4,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import models.drfssd.dense_conv
+import models.dense_conv
 from torch.autograd import Variable
+from utils.box_utils import weights_init
 
 
 def add_extras(size, in_channel, batch_norm=False):
@@ -73,7 +74,7 @@ class DenseSSDResnet(nn.Module):
 
         self.extras = nn.ModuleList(add_extras(str(size), 2048))
 
-        dense_list = models.drfssd.dense_conv.dense_list_res(channel_size, size)
+        dense_list = models.dense_conv.dense_list_res(channel_size, size)
         self.dense_list0 = nn.ModuleList(dense_list[0])
         self.dense_list1 = nn.ModuleList(dense_list[1])
         self.dense_list2 = nn.ModuleList(dense_list[2])
@@ -81,6 +82,7 @@ class DenseSSDResnet(nn.Module):
         self.dense_list4 = nn.ModuleList(dense_list[4])
         self.dense_list5 = nn.ModuleList(dense_list[5])
         self.smooth1 = nn.Conv2d(2048, 512, kernel_size=3, stride=1, padding=1)
+        self._init_modules()
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
@@ -89,6 +91,16 @@ class DenseSSDResnet(nn.Module):
             layers.append(block(self.in_planes, planes, stride))
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
+
+    def _init_modules(self):
+        self.extras.apply(weights_init)
+        self.dense_list0.apply(weights_init)
+        self.dense_list1.apply(weights_init)
+        self.dense_list2.apply(weights_init)
+        self.dense_list3.apply(weights_init)
+        self.dense_list4.apply(weights_init)
+        self.dense_list5.apply(weights_init)
+        self.smooth1.apply(weights_init)
 
     def forward(self, x):
         # Bottom-up
@@ -167,13 +179,13 @@ class DenseSSDResnet(nn.Module):
         return sources
 
 
-def DenseSSDResnet50(size):
-    return DenseSSDResnet(Bottleneck, [3, 4, 6, 3], size)
+def DRFSSDRes50(size, channel_size='48'):
+    return DenseSSDResnet(Bottleneck, [3, 4, 6, 3], size, channel_size)
 
 
-def DenseSSDResnet101(size):
-    return DenseSSDResnet(Bottleneck, [3, 4, 23, 3], size)
+def DRFSSDRes101(size, channel_size='48'):
+    return DenseSSDResnet(Bottleneck, [3, 4, 23, 3], size, channel_size)
 
 
-def DenseSSDResnet152(size):
-    return DenseSSDResnet(Bottleneck, [3, 8, 36, 3], size)
+def DRFSSDRes152(size, channel_size='48'):
+    return DenseSSDResnet(Bottleneck, [3, 8, 36, 3], size, channel_size)

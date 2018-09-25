@@ -12,7 +12,7 @@ class FocalLossSigmoid(nn.Module):
     sigmoid version focal loss
     '''
 
-    def __init__(self, alpha=1, gamma=0, size_average=False):
+    def __init__(self, alpha=0.25, gamma=2, size_average=False):
         super(FocalLossSigmoid, self).__init__()
         self.alpha = alpha
         self.gamma = gamma

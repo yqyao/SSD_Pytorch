@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import torch.nn.init as init
+from utils.box_utils import weights_init
 
 class L2Norm(nn.Module):
     def __init__(self, n_channels, scale):
@@ -87,6 +88,11 @@ class VGG16Extractor(nn.Module):
         self.vgg = nn.ModuleList(vgg(base[str(size)], 3))
         self.L2Norm = L2Norm(512, 20)
         self.extras = nn.ModuleList(add_extras(extras_cfg[str(size)], 1024))
+        self._init_modules()
+
+    def _init_modules(self):
+        self.extras.apply(weights_init)
+        self.vgg.apply(weights_init)
 
     def forward(self, x):
         """Applies network layers and ops on input image(s) x.
@@ -127,6 +133,24 @@ class VGG16Extractor(nn.Module):
             if k % 2 == 1:
                 sources.append(x)
         return sources
+
+def SSDVgg(size, channel_size='48'):
+    return VGG16Extractor(size)
+
+if __name__ == "__main__":
+    import os
+    os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+    with torch.no_grad():
+        model3 = VGG16Extractor(300)
+        model3.eval()
+        x = torch.randn(16, 3, 300, 300)
+        model3.cuda()
+        model3(x.cuda())
+        import time
+        st = time.time()
+        for i in range(1000):
+            model3(x.cuda())
+        print(time.time() - st)
 
 
 
