@@ -15,6 +15,7 @@ TRAIN:
   NEG_RATIO: 3
   WARMUP: True
   WARMUP_EPOCH: 2
+  TRAIN_ON: True
 
 SMALL:
   FEATURE_MAPS: [[38, 38], [19, 19], [10, 10], [5, 5], [3, 3], [1, 1]]

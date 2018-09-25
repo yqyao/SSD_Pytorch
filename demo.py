@@ -12,7 +12,8 @@ from data import COCODetection, VOCDetection, detection_collate, BaseTransform, 
 from layers.modules import MultiBoxLoss, RefineMultiBoxLoss
 from layers.functions import Detect
 from utils.nms_wrapper import nms, soft_nms
-from configs.config import cfg, cfg_from_file
+from configs.config import cfg, cfg_from_file, VOC_CLASSES, COCO_CLASSES
+from utils.box_utils import draw_rects
 import numpy as np
 import time
 import os 
@@ -21,10 +22,13 @@ import pickle
 import datetime
 from models.model_builder import SSD
 import yaml
+import cv2
 
 
 def arg_parse():
     parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
+    parser.add_argument("--images", dest = 'images', help = 
+                        "Image / Directory containing images to perform detection upon",default = "images", type = str)
     parser.add_argument('--weights', default='weights/ssd_darknet_300.pth',
                         type=str, help='Trained state_dict file path to open')
     parser.add_argument(
@@ -87,18 +91,20 @@ def im_detect(img, net, detector, transform, thresh=0.01):
     return output
 
 def main():
-    cfg_from_file("./configs/ssd_res50_voc.yaml")  
     global args
     args = arg_parse()
+    cfg_from_file(args.cfg_file)  
     bgr_means = cfg.TRAIN.BGR_MEAN
     dataset_name = cfg.DATASETS.DATA_TYPE
     batch_size = cfg.TEST.BATCH_SIZE
     num_workers = args.num_workers
     if cfg.DATASETS.DATA_TYPE == 'VOC':
         trainvalDataset = VOCDetection
+        classes = VOC_CLASSES
         top_k = 200
     else:
         trainvalDataset = COCODetection
+        classes = COCO_CLASSES
         top_k = 300
     valSet = cfg.DATASETS.VAL_TYPE
     num_classes = cfg.MODEL.NUM_CLASSES
@@ -106,9 +112,10 @@ def main():
     if not os.path.exists(save_folder):
         os.mkdir(save_folder)
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    cfg.TRAIN.TRAIN_ON = False
     net = SSD(cfg)
 
-    checkpoint = torch.load(args.resume_net)
+    checkpoint = torch.load(args.weights)
     state_dict = checkpoint['model']
     from collections import OrderedDict
     new_state_dict = OrderedDict()
@@ -125,6 +132,7 @@ def main():
     img_wh = cfg.TEST.INPUT_WH
     ValTransform = BaseTransform(img_wh, bgr_means, (2, 0, 1))
     input_folder = args.images
+    thresh = cfg.TEST.CONFIDENCE_THRESH
     for item in os.listdir(input_folder)[2:3]: 
         img_path = os.path.join(input_folder, item)
         print(img_path)

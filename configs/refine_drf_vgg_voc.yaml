@@ -15,6 +15,7 @@ TRAIN:
   NEG_RATIO: 3
   WARMUP: True
   WARMUP_EPOCH: 2
+  TRAIN_ON: True
 
 
 SMALL:

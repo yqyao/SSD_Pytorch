@@ -82,8 +82,9 @@ class SSD(nn.Module):
                 self.odm_conf += [nn.Conv2d(self.odm_channels[i], self.num_anchors[i]* self.num_classes, kernel_size=3, padding=1)]
             else:
                 self.arm_loc += [nn.Conv2d(self.arm_channels[i], self.num_anchors[i]*4, kernel_size=3, padding=1)]
-                self.arm_conf += [nn.Conv2d(self.arm_channels[i], self.num_anchors[i]* self.num_classes, kernel_size=3, padding=1)]                
-        self._init_modules()
+                self.arm_conf += [nn.Conv2d(self.arm_channels[i], self.num_anchors[i]* self.num_classes, kernel_size=3, padding=1)] 
+        if cfg.TRAIN.TRAIN_ON:               
+            self._init_modules()
 
     def forward(self, x):
  

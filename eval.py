@@ -49,8 +49,6 @@ def eval_net(val_dataset, val_loader, net, detector, cfg, transform, max_per_ima
                  for _ in range(num_classes)]
     det_file = os.path.join(eval_save_folder, 'detections.pkl')
 
-    _t = {'im_detect': Timer(), 'misc': Timer()}
-
     if args.retest:
         f = open(det_file,'rb')
         all_boxes = pickle.load(f)
@@ -104,9 +102,9 @@ def eval_net(val_dataset, val_loader, net, detector, cfg, transform, max_per_ima
     print("detect time: ", time.time() - st)
 
 def main():
-    cfg_from_file("./configs/ssd_res50_voc.yaml")  
     global args
     args = arg_parse()
+    cfg_from_file(args.cfg_file)  
     bgr_means = cfg.TRAIN.BGR_MEAN
     dataset_name = cfg.DATASETS.DATA_TYPE
     batch_size = cfg.TEST.BATCH_SIZE
@@ -117,7 +115,7 @@ def main():
     else:
         trainvalDataset = COCODetection
         top_k = 300
-
+    dataroot = cfg.DATASETS.DATAROOT
     if cfg.MODEL.SIZE == '300':
         size_cfg = cfg.SMALL
     else:
@@ -128,9 +126,10 @@ def main():
     if not os.path.exists(save_folder):
         os.mkdir(save_folder)
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    cfg.TRAIN.TRAIN_ON = False
     net = SSD(cfg)
 
-    checkpoint = torch.load(args.resume_net)
+    checkpoint = torch.load(args.weights)
     state_dict = checkpoint['model']
     from collections import OrderedDict
     new_state_dict = OrderedDict()

@@ -28,6 +28,7 @@ __C.MODEL.PRETRAIN_WEIGHTS = ''
 __C.MODEL.OBJECT_SCORE = 0.01
 
 
+
 __C.TRAIN = AttrDict()
 __C.TRAIN.OVERLAP = 0.5
 __C.TRAIN.OHEM = True
@@ -40,6 +41,7 @@ __C.TRAIN.CHANNEL_SIZE = '48'
 __C.TRAIN.WARMUP = True
 __C.TRAIN.WARMUP_EPOCH = 2
 __C.TRAIN.DEVICE_IDS = [0]
+__C.TRAIN.TRAIN_ON = True
 
 __C.SMALL = AttrDict()
 
@@ -110,6 +112,17 @@ __C.TEST.CONFIDENCE_THRESH = 0.01
 __C.TEST.NMS_TYPE = 'NMS'
 __C.TEST.NMS_OVERLAP = 0.45
 __C.TEST.BATCH_SIZE = 16
+
+
+VOC_CLASSES = (  '__background__',# always index 0
+    'aeroplane', 'bicycle', 'bird', 'boat',
+    'bottle', 'bus', 'car', 'cat', 'chair',
+    'cow', 'diningtable', 'dog', 'horse',
+    'motorbike', 'person', 'pottedplant',
+    'sheep', 'sofa', 'train', 'tvmonitor')
+
+COCO_CLASSES = ('__background__',
+                'person', 'bicycle', 'car', 'motorbike', 'aeroplane', 'bus', 'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket', 'bottle', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair', 'sofa', 'pottedplant', 'bed', 'diningtable', 'toilet', 'tvmonitor', 'laptop', 'mouse', 'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush')
 
 def merge_cfg_from_file(cfg_filename):
     """Load a yaml config file and merge it into the global config."""
