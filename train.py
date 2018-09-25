@@ -61,7 +61,7 @@ def adjust_learning_rate(optimizer, epoch, step_epoch, gamma, epoch_size, iterat
                 if epoch > step_epoch[idx] and epoch <= step_epoch[idx+1]:
                     div = idx 
                     break
-        lr = acfg.SOLVER.BASE_LR * (gamma ** div)
+        lr = cfg.SOLVER.BASE_LR * (gamma ** div)
 
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr

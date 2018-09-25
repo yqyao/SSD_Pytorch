@@ -88,35 +88,35 @@ $COCO/images/val2014/
 ```Shell
 mkdir weights
 cd weights
+mkdir pretrained_models
+
 wget https://s3.amazonaws.com/amdegroot-models/vgg16_reducedfc.pth
 wget https://download.pytorch.org/models/resnet50-19c8e357.pth
 wget https://download.pytorch.org/models/resnet101-5d3b4d8f.pth
 wget https://download.pytorch.org/models/resnet152-b121ed2d.pth
+mv download_weights pretrained_models
 ```
 
 - To train SSD_Pytorch using the train script simply specify the parameters listed in `train.py` as a flag or manually change them.
 
 ```Shell
-python train.py -v ssd_vgg
+python train.py --cfg ./configs/ssd_vgg_voc.yaml
 ```
 
 - Note:
-    * -d: choose datasets, VOC or COCO, VOC2012(voc12 trainval),VOC0712++(0712 trainval + 07test)
-    * -v choose backbone version, ssd_vgg, ssd_res, ssd_darknet, drf_ssd_vgg, drf_ssd_res, refine_ssd_vgg
-    * s: image size, 300 or 512
-    * You can pick-up training from a checkpoint by specifying the path as one of the training parameters (again, see train.py for options)
-    * learning rate: ssd_vgg, ssd_res, ssd_darknet 0.001, drf_ssd_vgg, drf_ssd_res 0.004, refine_ssd_vgg 0.002
+  all configs are in sd_vgg_voc.yaml
+
 - To evaluate a trained network:
 
 ```Shell
-python eval.py -v ssd_vgg
+python eval.py --cfg ./configs/ssd_vgg_voc.yaml --weights ./eval_weights
 ```
 
 - To detect one images
 
 ```
  # you need put some images in ./images
-python demo.py -v ssd_vgg --images ./images --save_folder ./output
+python demo.py --cfg ./configs/ssd_vgg_voc.yaml --images ./images --save_folder ./output
 
 ```
 You can specify the parameters listed in the `eval.py` or `demo.py` file by flagging them or manually changing them.  
