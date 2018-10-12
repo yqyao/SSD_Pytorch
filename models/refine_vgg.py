@@ -4,8 +4,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import models.drfssd.dense_conv
-import models.refine_drfssd.refine_dense_conv
 from torch.autograd import Variable
 import torch.nn.init as init
 from utils.box_utils import weights_init
