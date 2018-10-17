@@ -51,8 +51,10 @@ def dense_conv4_res_300(channels):
     layers.append(nn.Conv2d(2048, 2048, kernel_size=3, padding=1))
     layers.append(nn.Conv2d(2048, channels[0], kernel_size=3, padding=1))
     layers.append(nn.Conv2d(2048, channels[1], kernel_size=3, padding=1))
-    layers.append(nn.Upsample(size=(19, 19), mode='bilinear'))
-    layers.append(nn.Upsample(size=(38, 38), mode='bilinear'))
+    # layers.append(nn.Upsample(size=(19, 19), mode='bilinear'))
+    # layers.append(nn.Upsample(size=(38, 38), mode='bilinear'))
+    layers.append(nn.Upsample(scale_factor=2, mode='bilinear'))
+    layers.append(nn.Upsample(scale_factor=4, mode='bilinear'))
     layers.append(nn.MaxPool2d(kernel_size=2, stride=2, ceil_mode=True))
     layers.append(nn.Conv2d(2048, channels[2], kernel_size=3, padding=1))
     return layers
@@ -62,8 +64,10 @@ def dense_conv4_vgg_300(channels):
     layers.append(nn.Conv2d(512, 512, kernel_size=3, padding=1))
     layers.append(nn.Conv2d(512, channels[0], kernel_size=3, padding=1))
     layers.append(nn.Conv2d(512, channels[1], kernel_size=3, padding=1))
-    layers.append(nn.Upsample(size=(19, 19), mode='bilinear'))
-    layers.append(nn.Upsample(size=(38, 38), mode='bilinear'))
+    # layers.append(nn.Upsample(size=(19, 19), mode='bilinear'))
+    # layers.append(nn.Upsample(size=(38, 38), mode='bilinear'))
+    layers.append(nn.Upsample(scale_factor=2, mode='bilinear'))
+    layers.append(nn.Upsample(scale_factor=4, mode='bilinear'))
     layers.append(nn.MaxPool2d(kernel_size=2, stride=2, ceil_mode=True))
     layers.append(nn.Conv2d(512, channels[2], kernel_size=3, padding=1))    
     return layers
@@ -97,9 +101,12 @@ def dense_conv5_vgg_300(channels):
     layers.append(nn.Conv2d(256, channels[0], kernel_size=3, padding=1))
     layers.append(nn.Conv2d(256, channels[1], kernel_size=3, padding=1))
     layers.append(nn.Conv2d(256, channels[2], kernel_size=3, padding=1))
-    layers.append(nn.Upsample(size=(10, 10), mode='bilinear'))
-    layers.append(nn.Upsample(size=(19, 19), mode='bilinear'))
-    layers.append(nn.Upsample(size=(38, 38), mode='bilinear'))
+    # layers.append(nn.Upsample(size=(10, 10), mode='bilinear'))
+    # layers.append(nn.Upsample(size=(19, 19), mode='bilinear'))
+    # layers.append(nn.Upsample(size=(38, 38), mode='bilinear'))
+    layers.append(nn.Upsample(scale_factor=2, mode='bilinear'))
+    layers.append(nn.Upsample(scale_factor=4, mode='bilinear'))
+    layers.append(nn.Upsample(scale_factor=8, mode='bilinear'))
     return layers
 
 def dense_conv5_vgg_512(channels):
@@ -120,9 +127,12 @@ def dense_conv5_res_300(channels):
     layers.append(nn.Conv2d(256, channels[0], kernel_size=3, padding=1))
     layers.append(nn.Conv2d(256, channels[1], kernel_size=3, padding=1))
     layers.append(nn.Conv2d(256, channels[2], kernel_size=3, padding=1))
-    layers.append(nn.Upsample(size=(10, 10), mode='bilinear'))
-    layers.append(nn.Upsample(size=(19, 19), mode='bilinear'))
-    layers.append(nn.Upsample(size=(38, 38), mode='bilinear'))
+    # layers.append(nn.Upsample(size=(10, 10), mode='bilinear'))
+    # layers.append(nn.Upsample(size=(19, 19), mode='bilinear'))
+    # layers.append(nn.Upsample(size=(38, 38), mode='bilinear'))
+    layers.append(nn.Upsample(scale_factor=2, mode='bilinear'))
+    layers.append(nn.Upsample(scale_factor=4, mode='bilinear'))
+    layers.append(nn.Upsample(scale_factor=8, mode='bilinear'))
     return layers
 
 def dense_conv5_res_512(channels):

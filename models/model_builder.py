@@ -48,6 +48,20 @@ class SSD(nn.Module):
         head: "multibox head" consists of loc and conf conv layers
     """
 
+    def _init_modules(self):
+        self.arm_loc.apply(weights_init)
+        self.arm_conf.apply(weights_init)
+        if self.cfg.MODEL.REFINE:
+            self.odm_loc.apply(weights_init)
+            self.odm_conf.apply(weights_init)
+        if self.cfg.MODEL.LOAD_PRETRAINED_WEIGHTS:
+            weights = torch.load(self.cfg.MODEL.PRETRAIN_WEIGHTS)
+            print("load pretrain model {}".format(self.cfg.MODEL.PRETRAIN_WEIGHTS))
+            if self.cfg.MODEL.TYPE.split('_')[-1] == 'vgg':
+                self.extractor.vgg.load_state_dict(weights)
+            else:
+                self.extractor.load_state_dict(weights, strict=False)
+
     def __init__(self, cfg):
         super(SSD, self).__init__()
         self.cfg = cfg
@@ -123,20 +137,6 @@ class SSD(nn.Module):
                 self.priors if self.input_fixed else self.prior_layer(img_wh, feature_maps_wh)
             )
         return output
-
-    def _init_modules(self):
-        self.arm_loc.apply(weights_init)
-        self.arm_conf.apply(weights_init)
-        if self.cfg.MODEL.REFINE:
-            self.odm_loc.apply(weights_init)
-            self.odm_conf.apply(weights_init)
-        if self.cfg.MODEL.LOAD_PRETRAINED_WEIGHTS:
-            weights = torch.load(self.cfg.MODEL.PRETRAIN_WEIGHTS)
-            print("load pretrain model {}".format(self.cfg.MODEL.PRETRAIN_WEIGHTS))
-            if self.cfg.MODEL.TYPE.split('_')[-1] == 'vgg':
-                self.extractor.vgg.load_state_dict(weights)
-            else:
-                self.extractor.load_state_dict(weights, strict=False)
 
 
 

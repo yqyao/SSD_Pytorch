@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "3,2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3,2,1,0"
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -204,6 +204,7 @@ def main():
         os.mkdir(save_folder)
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
     net = SSD(cfg)
+    print(net)
     if cfg.MODEL.SIZE == '300':
         size_cfg = cfg.SMALL
     else:

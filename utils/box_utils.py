@@ -14,6 +14,10 @@ import torch.nn.init as init
 def xavier(param):
     init.xavier_uniform_(param)
 
+# def weights_init(m):
+#     if isinstance(m, nn.Conv2d):
+#         xavier(m.weight.data)
+#         m.bias.data.zero_()
 
 def weights_init(m):
     for key in m.state_dict():
