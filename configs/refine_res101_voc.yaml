@@ -1,0 +1,83 @@
+MODEL:
+  TYPE: refine_res
+  SIZE: '300'
+  REFINE: True
+  CONV_BODY: refine_res.RefineResnet101
+  NUM_CLASSES: 21
+  LOAD_PRETRAINED_WEIGHTS: True
+  PRETRAIN_WEIGHTS: './weights/pretrained_models/resnet101-5d3b4d8f.pth'
+
+TRAIN:
+  OVERLAP: 0.5
+  BGR_MEAN: [104, 117, 123]
+  BATCH_SIZE: 32
+  OHEM: True
+  NEG_RATIO: 3
+  WARMUP: True
+  WARMUP_EPOCH: 2
+  TRAIN_ON: True
+
+
+SMALL:
+  FEATURE_MAPS: [[40, 40], [20, 20], [10, 10], [5, 5]]
+  ARM_CHANNELS: [512, 1024, 512, 256]
+  ODM_CHANNELS: [256, 256, 256, 256]
+  NUM_ANCHORS: [3, 3, 3, 3]
+  STEPS: [[8, 8], [16, 16], [32, 32], [64, 64]]
+  MIN_SIZES: [30, 64, 128, 256]
+  MAX_SIZES: [64, 128, 256, 315]
+  ASPECT_RATIOS : [[2, 0.5], [2, 0.5], [2, 0.5], [2, 0.5]]
+  VARIANCE : [0.1, 0.2]
+  CLIP: True
+  IMG_WH: [320, 320]
+  INPUT_FIXED: True # if you want to input different size, you need to set this False.
+  USE_MAX_SIZE: False
+
+BIG:
+  FEATURE_MAPS: [[64, 64], [32, 32], [16, 16], [8, 8]]
+  ARM_CHANNELS: [512, 1024, 512, 256]
+  ODM_CHANNELS: [256, 256, 256, 256]
+  NUM_ANCHORS: [3, 3, 3, 3]
+  STEPS: [[8, 8], [16, 16], [32, 32], [64, 64]]
+  MIN_SIZES: [30, 64, 128, 256]
+  MAX_SIZES: [64, 128, 256, 315]
+  ASPECT_RATIOS : [[2, 0.5], [2, 0.5], [2, 0.5], [2, 0.5]]
+  CLIP: True
+  IMG_WH: [512, 512]
+  INPUT_FIXED: True # if you want to input different size, you need to set this False.
+  USE_MAX_SIZE: False
+
+SOLVER:
+  WEIGHT_DECAY: 0.0005
+  BASE_LR: 0.001
+  GAMMA: 0.1
+  MOMENTUM: 0.9
+  EPOCH_STEPS: [0, 150, 200]  
+  END_EPOCH: 250
+  START_EPOCH: 0
+
+DATASETS:
+  TRAIN_TYPE: [['0712', '0712_trainval']]
+  VAL_TYPE: [['0712', '2007_test']]
+  DATAROOT: 'data/datasets/VOCdevkit0712/'
+  DATA_TYPE: 'VOC'
+  SETS:
+    VOC: [['0712', '0712_trainval']]
+    VOC0712PLUS: [['0712', '0712_trainval_test']]
+    VOC0712: [['2012', '2012_trainval']]
+    COCO: [['2014', 'train'], ['2014', 'valminusminival']]
+    VOC2007: [['0712', "2007_test"]]
+    COCOval: [['2014', 'minival']]
+    VOCROOT: 'data/datasets/VOCdevkit0712/'
+    COCOROOT: 'data/datasets/coco2015'
+  
+TEST:
+  INPUT_WH: [320, 320]
+  CONFIDENCE_THRESH: 0.01
+  NMS_OVERLAP: 0.45
+  BATCH_SIZE: 16
+  
+
+
+
+
