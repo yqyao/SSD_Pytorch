@@ -2,6 +2,7 @@ import torch
 from math import sqrt as sqrt
 from itertools import product as product
 
+
 class PriorBox(object):
     """Compute priorbox coordinates in center-offset form for each source
     feature map.
@@ -11,6 +12,7 @@ class PriorBox(object):
     recent version of the paper.
 
     """
+
     def __init__(self, cfg):
         super(PriorBox, self).__init__()
         self.size = cfg.MODEL.SIZE
@@ -54,12 +56,14 @@ class PriorBox(object):
                     # aspect_ratio: 1
                     # rel size: sqrt(s_k * s_(k+1))
                     if self.use_max_sizes:
-                        s_k_prime_w = sqrt(s_k_w * (self.max_sizes[k] /self.img_wh[0]))
-                        s_k_prime_h = sqrt(s_k_h * (self.max_sizes[k] /self.img_wh[1]))
+                        s_k_prime_w = sqrt(
+                            s_k_w * (self.max_sizes[k] / self.img_wh[0]))
+                        s_k_prime_h = sqrt(
+                            s_k_h * (self.max_sizes[k] / self.img_wh[1]))
                         mean += [cx, cy, s_k_prime_w, s_k_prime_h]
 
                     for ar in self.aspect_ratios[k]:
-                        mean += [cx, cy, s_k_w*sqrt(ar), s_k_h/sqrt(ar)]
+                        mean += [cx, cy, s_k_w * sqrt(ar), s_k_h / sqrt(ar)]
 
         # back to torch land
         output = torch.Tensor(mean).view(-1, 4)

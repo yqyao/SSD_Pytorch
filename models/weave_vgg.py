@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import torch.nn.init as init
-from model_helper import weights_init
+from models.model_helper import FpnAdapter, WeaveAdapter, weights_init
 
 
 class L2Norm(nn.Module):
@@ -59,14 +59,6 @@ def vgg(cfg, i, batch_norm=False):
     return layers
 
 
-extras_cfg = {
-    '300': [256, 'S', 512, 128, 'S', 256, 128, 256, 128, 256],
-    '512': [
-        256, 'S', 512, 128, 'S', 256, 128, 'S', 256, 128, 'S', 256, 128, 'S',
-        256
-    ],
-}
-
 base = {
     '300': [
         64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'C', 512, 512, 512, 'M',
@@ -79,97 +71,94 @@ base = {
 }
 
 
-def add_extras(cfg, i, batch_norm=False):
-    # Extra layers added to VGG for feature scaling
+def add_extras(size):
     layers = []
-    in_channels = i
-    flag = False
-    for k, v in enumerate(cfg):
-        if in_channels != 'S':
-            if v == 'S':
-                layers += [
-                    nn.Conv2d(
-                        in_channels,
-                        cfg[k + 1],
-                        kernel_size=(1, 3)[flag],
-                        stride=2,
-                        padding=1)
-                ]
-            else:
-                layers += [nn.Conv2d(in_channels, v, kernel_size=(1, 3)[flag])]
-            flag = not flag
-        in_channels = v
+    layers += [nn.Conv2d(1024, 256, kernel_size=1, stride=1)]
+    layers += [nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1)]
+    layers += [nn.Conv2d(256, 128, kernel_size=1, stride=1)]
+    layers += [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
+
     return layers
 
 
 class VGG16Extractor(nn.Module):
-    def __init__(self, size):
+    def __init__(self, size, channel_size='48'):
         super(VGG16Extractor, self).__init__()
         self.vgg = nn.ModuleList(vgg(base[str(size)], 3))
-        self.L2Norm = L2Norm(512, 20)
-        self.extras = nn.ModuleList(add_extras(extras_cfg[str(size)], 1024))
+        self.extras = nn.ModuleList(add_extras(str(size)))
+        self.L2Norm_4_3 = L2Norm(512, 10)
+        self.L2Norm_5_3 = L2Norm(1024, 8)
+        self.weave = WeaveAdapter([512, 1024, 256, 256], 4)
         self._init_modules()
 
     def _init_modules(self):
         self.extras.apply(weights_init)
-        self.vgg.apply(weights_init)
 
     def forward(self, x):
         """Applies network layers and ops on input image(s) x.
-
         Args:
             x: input image or batch of images. Shape: [batch,3*batch,300,300].
-
         Return:
             Depending on phase:
             test:
                 Variable(tensor) of output class label predictions,
                 confidence score, and corresponding location predictions for
                 each object detected. Shape: [batch,topk,7]
-
             train:
                 list of concat outputs from:
                     1: confidence layers, Shape: [batch*num_priors,num_classes]
                     2: localization layers, Shape: [batch,num_priors*4]
                     3: priorbox layers, Shape: [2,num_priors*4]
         """
-        sources = list()
+        arm_sources = list()
+        odm_sources = list()
 
-        # apply vgg up to conv4_3 relu
-        for k in range(23):
-            x = self.vgg[k](x)
+        for i in range(23):
+            x = self.vgg[i](x)
+        #38x38
+        c2 = x
+        c2 = self.L2Norm_4_3(c2)
+        arm_sources.append(c2)
 
-        s = self.L2Norm(x)
-        sources.append(s)
-
-        # apply vgg up to fc7
         for k in range(23, len(self.vgg)):
             x = self.vgg[k](x)
-        sources.append(x)
+        #19x19
+        c3 = x
+        c3 = self.L2Norm_5_3(c3)
+        arm_sources.append(c3)
 
-        # apply extra layers and cache source layer outputs
-        for k, v in enumerate(self.extras):
-            x = F.relu(v(x), inplace=True)
-            if k % 2 == 1:
-                sources.append(x)
-        return sources
+        # 10x10
+        x = F.relu(self.extras[0](x), inplace=True)
+        x = F.relu(self.extras[1](x), inplace=True)
+        c4 = x
+        arm_sources.append(c4)
+
+        # 5x5
+        x = F.relu(self.extras[2](x), inplace=True)
+        x = F.relu(self.extras[3](x), inplace=True)
+        c5 = x
+        arm_sources.append(c5)
+
+        if len(self.extras) > 4:
+            x = F.relu(self.extras[4](x), inplace=True)
+            x = F.relu(self.extras[5](x), inplace=True)
+            c6 = x
+            arm_sources.append(c6)
+        odm_sources = self.weave(arm_sources)
+        return arm_sources, odm_sources
 
 
-def SSDVgg(size, channel_size='48'):
+def weave_vgg(size, channel_size='48'):
     return VGG16Extractor(size)
 
 
 if __name__ == "__main__":
     import os
-    os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    model = weave_vgg(size=300)
+    print(model)
     with torch.no_grad():
-        model3 = VGG16Extractor(300)
-        model3.eval()
-        x = torch.randn(16, 3, 300, 300)
-        model3.cuda()
-        model3(x.cuda())
-        import time
-        st = time.time()
-        for i in range(1000):
-            model3(x.cuda())
-        print(time.time() - st)
+        model.eval()
+        x = torch.randn(1, 3, 320, 320)
+        model.cuda()
+        model(x.cuda())

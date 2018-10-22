@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from model_helper import FpnAdapter, weights_init
+from model_helper import FpnAdapter, WeaveAdapter, weights_init
 
 
 def add_extras(size, in_channel, batch_norm=False):
@@ -102,9 +102,9 @@ class Bottleneck(nn.Module):
         return out
 
 
-class RefineResnet(nn.Module):
+class WeaveResnet(nn.Module):
     def __init__(self, block, num_blocks, size):
-        super(RefineResnet, self).__init__()
+        super(WeaveResnet, self).__init__()
         self.inplanes = 64
 
         self.conv1 = nn.Conv2d(
@@ -120,7 +120,7 @@ class RefineResnet(nn.Module):
         self.extras = nn.ModuleList(add_extras(str(size), self.inchannel))
         self.smooth1 = nn.Conv2d(
             self.inchannel, 512, kernel_size=3, stride=1, padding=1)
-        self.fpn = FpnAdapter([512, 1024, 512, 256], 4)
+        self.weave = WeaveAdapter([512, 1024, 512, 256], 4)
         self._init_modules()
 
     def _make_layer(self, block, planes, blocks, stride=1):
@@ -164,26 +164,26 @@ class RefineResnet(nn.Module):
             x = F.relu(v(x), inplace=True)
             if k % 2 == 1:
                 arm_sources.append(x)
-        odm_sources = self.fpn(arm_sources)
+        odm_sources = self.weave(arm_sources)
         return arm_sources, odm_sources
 
 
-def RefineResnet50(size, channel_size='48'):
-    return RefineResnet(Bottleneck, [3, 4, 6, 3], size)
+def WeaveResnet50(size, channel_size='48'):
+    return WeaveResnet(Bottleneck, [3, 4, 6, 3], size)
 
 
-def RefineResnet101(size, channel_size='48'):
-    return RefineResnet(Bottleneck, [3, 4, 23, 3], size)
+def WeaveResnet101(size, channel_size='48'):
+    return WeaveResnet(Bottleneck, [3, 4, 23, 3], size)
 
 
-def RefineResnet152(size, channel_size='48'):
-    return RefineResnet(Bottleneck, [3, 8, 36, 3], size)
+def WeaveResnet152(size, channel_size='48'):
+    return WeaveResnet(Bottleneck, [3, 8, 36, 3], size)
 
 
 if __name__ == "__main__":
     import os
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-    model = RefineResnet50(size=300)
+    model = WeaveResnet50(size=300)
     print(model)
     with torch.no_grad():
         model.eval()

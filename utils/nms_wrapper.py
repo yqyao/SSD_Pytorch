@@ -8,7 +8,6 @@
 from .nms.cpu_nms import cpu_nms, cpu_soft_nms
 from .nms.gpu_nms import gpu_nms
 
-
 # def nms(dets, thresh, force_cpu=False):
 #     """Dispatch to either CPU or GPU NMS implementations."""
 
@@ -29,6 +28,7 @@ def nms(dets, thresh, force_cpu=False):
         #return cpu_soft_nms(dets, thresh, method = 0)
         return cpu_nms(dets, thresh)
     return gpu_nms(dets, thresh)
+
 
 def soft_nms(dets, Nt=0.3, sigma=0.5, thresh=0.001, method=1):
     """Dispatch to either CPU or GPU NMS implementations."""

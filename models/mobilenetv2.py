@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import init
-from utils.box_utils import weights_init
+from model_helper import weights_init
 
 
 def add_extras(size, in_channel, batch_norm=False):
@@ -24,6 +24,7 @@ def add_extras(size, in_channel, batch_norm=False):
         layers += [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
 
     return layers
+
 
 def _make_divisible(v, divisor, min_value=None):
     """
@@ -46,14 +47,23 @@ def _make_divisible(v, divisor, min_value=None):
 
 
 class LinearBottleneck(nn.Module):
-    def __init__(self, inplanes, outplanes, stride=1, t=6, activation=nn.ReLU6):
+    def __init__(self, inplanes, outplanes, stride=1, t=6,
+                 activation=nn.ReLU6):
         super(LinearBottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, inplanes * t, kernel_size=1, bias=False)
+        self.conv1 = nn.Conv2d(
+            inplanes, inplanes * t, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(inplanes * t)
-        self.conv2 = nn.Conv2d(inplanes * t, inplanes * t, kernel_size=3, stride=stride, padding=1, bias=False,
-                               groups=inplanes * t)
+        self.conv2 = nn.Conv2d(
+            inplanes * t,
+            inplanes * t,
+            kernel_size=3,
+            stride=stride,
+            padding=1,
+            bias=False,
+            groups=inplanes * t)
         self.bn2 = nn.BatchNorm2d(inplanes * t)
-        self.conv3 = nn.Conv2d(inplanes * t, outplanes, kernel_size=1, bias=False)
+        self.conv3 = nn.Conv2d(
+            inplanes * t, outplanes, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm2d(outplanes)
         self.activation = activation(inplace=True)
         self.stride = stride
@@ -85,7 +95,13 @@ class MobileNet2(nn.Module):
     """MobileNet2 implementation.
     """
 
-    def __init__(self, scale=1.0, input_size=224, t=6, in_channels=3, size=300, activation=nn.ReLU6):
+    def __init__(self,
+                 scale=1.0,
+                 input_size=224,
+                 t=6,
+                 in_channels=3,
+                 size=300,
+                 activation=nn.ReLU6):
         """
         MobileNet2 constructor.
         :param in_channels: (int, optional): number of channels in the input tensor.
@@ -109,20 +125,31 @@ class MobileNet2(nn.Module):
         self.num_of_channels = [32, 16, 24, 32, 64, 96, 160, 320]
         # assert (input_size % 32 == 0)
 
-        self.c = [_make_divisible(ch * self.scale, 8) for ch in self.num_of_channels]
+        self.c = [
+            _make_divisible(ch * self.scale, 8) for ch in self.num_of_channels
+        ]
         self.n = [1, 1, 2, 3, 4, 3, 3, 1]
         self.s = [2, 1, 2, 2, 2, 1, 2, 1]
-        self.conv1 = nn.Conv2d(in_channels, self.c[0], kernel_size=3, bias=False, stride=self.s[0], padding=1)
+        self.conv1 = nn.Conv2d(
+            in_channels,
+            self.c[0],
+            kernel_size=3,
+            bias=False,
+            stride=self.s[0],
+            padding=1)
         self.bn1 = nn.BatchNorm2d(self.c[0])
         # self.bottlenecks = self._make_bottlenecks()
         self.bottlenecks = nn.ModuleList(self._make_bottlenecks())
 
         # Last convolution has 1280 output channels for scale <= 1
-        self.last_conv_out_ch = 1280 if self.scale <= 1 else _make_divisible(1280 * self.scale, 8)
-        self.conv_last = nn.Conv2d(self.c[-1], self.last_conv_out_ch, kernel_size=1, bias=False)
+        self.last_conv_out_ch = 1280 if self.scale <= 1 else _make_divisible(
+            1280 * self.scale, 8)
+        self.conv_last = nn.Conv2d(
+            self.c[-1], self.last_conv_out_ch, kernel_size=1, bias=False)
         self.bn_last = nn.BatchNorm2d(self.last_conv_out_ch)
 
-        self.extras = nn.ModuleList(add_extras(str(self.size), self.last_conv_out_ch))
+        self.extras = nn.ModuleList(
+            add_extras(str(self.size), self.last_conv_out_ch))
         self._init_modules()
 
     def _init_modules(self):
@@ -133,15 +160,23 @@ class MobileNet2(nn.Module):
         stage_name = "LinearBottleneck{}".format(stage)
 
         # First module is the only one utilizing stride
-        first_module = LinearBottleneck(inplanes=inplanes, outplanes=outplanes, stride=stride, t=t,
-                                        activation=self.activation_type)
+        first_module = LinearBottleneck(
+            inplanes=inplanes,
+            outplanes=outplanes,
+            stride=stride,
+            t=t,
+            activation=self.activation_type)
         modules[stage_name + "_0"] = first_module
 
         # add more LinearBottleneck depending on number of repeats
         for i in range(n - 1):
             name = stage_name + "_{}".format(i + 1)
-            module = LinearBottleneck(inplanes=outplanes, outplanes=outplanes, stride=1, t=6,
-                                      activation=self.activation_type)
+            module = LinearBottleneck(
+                inplanes=outplanes,
+                outplanes=outplanes,
+                stride=1,
+                t=6,
+                activation=self.activation_type)
             modules[name] = module
         return nn.Sequential(modules)
 
@@ -150,16 +185,25 @@ class MobileNet2(nn.Module):
         stage_name = "Bottlenecks"
 
         # First module is the only one with t=1
-        bottleneck1 = self._make_stage(inplanes=self.c[0], outplanes=self.c[1], n=self.n[1], stride=self.s[1], t=1,
-                                       stage=0)
+        bottleneck1 = self._make_stage(
+            inplanes=self.c[0],
+            outplanes=self.c[1],
+            n=self.n[1],
+            stride=self.s[1],
+            t=1,
+            stage=0)
         modules.append(bottleneck1)
 
         # add more LinearBottleneck depending on number of repeats
         for i in range(1, len(self.c) - 1):
             name = stage_name + "_{}".format(i)
-            module = self._make_stage(inplanes=self.c[i], outplanes=self.c[i + 1], n=self.n[i + 1],
-                                      stride=self.s[i + 1],
-                                      t=self.t, stage=i)
+            module = self._make_stage(
+                inplanes=self.c[i],
+                outplanes=self.c[i + 1],
+                n=self.n[i + 1],
+                stride=self.s[i + 1],
+                t=self.t,
+                stage=i)
             modules += module
 
         return modules
@@ -188,8 +232,10 @@ class MobileNet2(nn.Module):
                 sources.append(x)
         return sources
 
+
 def SSDMobilenetv2(size, channel_size='48'):
     return MobileNet2(size=size)
+
 
 if __name__ == "__main__":
     import os
@@ -206,5 +252,3 @@ if __name__ == "__main__":
             model3(x.cuda())
         print(time.time() - st)
         # print(model3(x))
-
-

@@ -6,12 +6,14 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 from utils.box_utils import decode, center_size
 
+
 class Detect(Function):
     """At test time, Detect is the final layer of SSD.  Decode location preds,
     apply non-maximum suppression to location predictions based on conf
     scores and threshold to a top_k number of output predictions for both
     confidence score and locations.
     """
+
     def __init__(self, cfg):
         self.cfg = cfg
         self.num_classes = cfg.MODEL.NUM_CLASSES
@@ -47,7 +49,7 @@ class Detect(Function):
             conf.data[no_object_index.expand_as(conf.data)] = 0
         else:
             loc, conf, priors = predictions
-            conf = F.softmax(conf.view(-1, self.num_classes), 1)  
+            conf = F.softmax(conf.view(-1, self.num_classes), 1)
         loc_data = loc.data
         conf_data = conf.data
         # prior_data = priors.data
@@ -60,14 +62,18 @@ class Detect(Function):
         self.boxes = torch.zeros(num, self.num_priors, 4)
         self.scores = torch.zeros(num, self.num_priors, self.num_classes)
         conf_preds = conf_data.view(num, self.num_priors, self.num_classes)
-        batch_prior = prior_data.view(-1, self.num_priors, 4).expand((num, self.num_priors, 4))
+        batch_prior = prior_data.view(-1, self.num_priors, 4).expand(
+            (num, self.num_priors, 4))
         batch_prior = batch_prior.contiguous().view(-1, 4)
         if self.cfg.MODEL.REFINE:
-            default = decode(arm_loc_data.view(-1, 4), batch_prior, self.variance)
+            default = decode(
+                arm_loc_data.view(-1, 4), batch_prior, self.variance)
             default = center_size(default)
-            decoded_boxes = decode(loc_data.view(-1, 4), default, self.variance)
+            decoded_boxes = decode(
+                loc_data.view(-1, 4), default, self.variance)
         else:
-            decoded_boxes = decode(loc_data.view(-1, 4), batch_prior, self.variance)
+            decoded_boxes = decode(
+                loc_data.view(-1, 4), batch_prior, self.variance)
 
         self.scores = conf_preds.view(num, self.num_priors, self.num_classes)
         self.boxes = decoded_boxes.view(num, self.num_priors, 4)

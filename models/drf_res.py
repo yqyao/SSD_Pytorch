@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import models.dense_conv
 from torch.autograd import Variable
-from utils.box_utils import weights_init
+from model_helper import weights_init
 
 
 def add_extras(size, in_channel, batch_norm=False):
@@ -26,6 +26,7 @@ def add_extras(size, in_channel, batch_norm=False):
 
     return layers
 
+
 class Bottleneck(nn.Module):
     expansion = 4
 
@@ -33,20 +34,27 @@ class Bottleneck(nn.Module):
         super(Bottleneck, self).__init__()
         self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3,
-                               stride=stride, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(
+            planes,
+            planes,
+            kernel_size=3,
+            stride=stride,
+            padding=1,
+            bias=False)
         self.bn2 = nn.BatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(planes, self.expansion *
-                               planes, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(self.expansion*planes)
+        self.conv3 = nn.Conv2d(
+            planes, self.expansion * planes, kernel_size=1, bias=False)
+        self.bn3 = nn.BatchNorm2d(self.expansion * planes)
 
         self.downsample = nn.Sequential()
-        if stride != 1 or in_planes != self.expansion*planes:
+        if stride != 1 or in_planes != self.expansion * planes:
             self.downsample = nn.Sequential(
-                nn.Conv2d(in_planes, self.expansion*planes,
-                          kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(self.expansion*planes)
-            )
+                nn.Conv2d(
+                    in_planes,
+                    self.expansion * planes,
+                    kernel_size=1,
+                    stride=stride,
+                    bias=False), nn.BatchNorm2d(self.expansion * planes))
 
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
@@ -62,12 +70,12 @@ class DenseSSDResnet(nn.Module):
         super(DenseSSDResnet, self).__init__()
         self.in_planes = 64
 
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7,
-                               stride=2, padding=3, bias=False)
+        self.conv1 = nn.Conv2d(
+            3, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
 
         # Bottom-up layers
-        self.layer1 = self._make_layer(block,  64, num_blocks[0], stride=1)
+        self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
@@ -85,7 +93,7 @@ class DenseSSDResnet(nn.Module):
         self._init_modules()
 
     def _make_layer(self, block, planes, num_blocks, stride):
-        strides = [stride] + [1]*(num_blocks-1)
+        strides = [stride] + [1] * (num_blocks - 1)
         layers = []
         for stride in strides:
             layers.append(block(self.in_planes, planes, stride))
@@ -142,7 +150,7 @@ class DenseSSDResnet(nn.Module):
 
         p6 = F.relu(self.extras[0](c5), inplace=True)
         p6 = F.relu(self.extras[1](p6), inplace=True)
-        
+
         x = p6
 
         dense5_up1_conv = self.dense_list4[0](p6)
@@ -161,7 +169,8 @@ class DenseSSDResnet(nn.Module):
         dense_out2 = F.relu(self.dense_list5[1](dense_out2))
 
         dense_out3 = torch.cat(
-            (dense1_p3_conv, dense2_p2_conv, dense3_p1_conv, c5_, dense5_up1), 1)
+            (dense1_p3_conv, dense2_p2_conv, dense3_p1_conv, c5_, dense5_up1),
+            1)
         dense_out3 = F.relu(self.dense_list5[2](dense_out3))
 
         dense_out4 = torch.cat(

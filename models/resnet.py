@@ -5,7 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from utils.box_utils import weights_init
+from model_helper import weights_init
+
 
 def add_extras(size, in_channel, batch_norm=False):
     # Extra layers added to resnet for feature scaling
@@ -25,10 +26,17 @@ def add_extras(size, in_channel, batch_norm=False):
 
     return layers
 
+
 def conv3x3(in_planes, out_planes, stride=1):
     "3x3 convolution with padding"
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1, bias=False)
+    return nn.Conv2d(
+        in_planes,
+        out_planes,
+        kernel_size=3,
+        stride=stride,
+        padding=1,
+        bias=False)
+
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -60,6 +68,7 @@ class BasicBlock(nn.Module):
 
         return out
 
+
 class Bottleneck(nn.Module):
     expansion = 4
 
@@ -67,8 +76,13 @@ class Bottleneck(nn.Module):
         super(Bottleneck, self).__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
-                               padding=1, bias=False)
+        self.conv2 = nn.Conv2d(
+            planes,
+            planes,
+            kernel_size=3,
+            stride=stride,
+            padding=1,
+            bias=False)
         self.bn2 = nn.BatchNorm2d(planes)
         self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm2d(planes * 4)
@@ -104,26 +118,31 @@ class SSDResnet(nn.Module):
         super(SSDResnet, self).__init__()
         self.inplanes = 64
 
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7,
-                               stride=2, padding=3, bias=False)
+        self.conv1 = nn.Conv2d(
+            3, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
 
         # Bottom-up layers
-        self.layer1 = self._make_layer(block,  64, num_blocks[0], stride=1)
+        self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
         self.inchannel = block.expansion * 512
         self.extras = nn.ModuleList(add_extras(str(size), self.inchannel))
-        self.smooth1 = nn.Conv2d(self.inchannel, 512, kernel_size=3, stride=1, padding=1)
+        self.smooth1 = nn.Conv2d(
+            self.inchannel, 512, kernel_size=3, stride=1, padding=1)
         self._init_modules()
 
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes * block.expansion,
-                          kernel_size=1, stride=stride, bias=False),
+                nn.Conv2d(
+                    self.inplanes,
+                    planes * block.expansion,
+                    kernel_size=1,
+                    stride=stride,
+                    bias=False),
                 nn.BatchNorm2d(planes * block.expansion),
             )
 
@@ -156,20 +175,26 @@ class SSDResnet(nn.Module):
                 sources.append(x)
         return sources
 
+
 def SSDResnet18(size, channel_size='48'):
     return SSDResnet(BasicBlock, [2, 2, 2, 2], size)
+
 
 def SSDResnet34(size, channel_size='48'):
     return SSDResnet(BasicBlock, [3, 4, 6, 3], size)
 
+
 def SSDResnet50(size, channel_size='48'):
     return SSDResnet(Bottleneck, [3, 4, 6, 3], size)
+
 
 def SSDResnet101(size, channel_size='48'):
     return SSDResnet(Bottleneck, [3, 4, 23, 3], size)
 
+
 def SSDResnet152(size, channel_size='48'):
     return SSDResnet(Bottleneck, [3, 8, 36, 3], size)
+
 
 if __name__ == "__main__":
     import os

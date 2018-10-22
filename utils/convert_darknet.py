@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Written by yq_yao
-# 
+#
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -12,24 +12,25 @@ from model.darknet53 import Darknet53
 import argparse
 import os
 
+
 def copy_weights(bn, conv, ptr, weights, use_bn=True):
     if use_bn:
         num_bn_biases = bn.bias.numel()
-        
+
         #Load the weights
         bn_biases = torch.from_numpy(weights[ptr:ptr + num_bn_biases])
         ptr += num_bn_biases
-        
-        bn_weights = torch.from_numpy(weights[ptr: ptr + num_bn_biases])
-        ptr  += num_bn_biases
-        
-        bn_running_mean = torch.from_numpy(weights[ptr: ptr + num_bn_biases])
-        ptr  += num_bn_biases
-        
-        bn_running_var = torch.from_numpy(weights[ptr: ptr + num_bn_biases])
-        ptr  += num_bn_biases
-        
-        #Cast the loaded weights into dims of model weights. 
+
+        bn_weights = torch.from_numpy(weights[ptr:ptr + num_bn_biases])
+        ptr += num_bn_biases
+
+        bn_running_mean = torch.from_numpy(weights[ptr:ptr + num_bn_biases])
+        ptr += num_bn_biases
+
+        bn_running_var = torch.from_numpy(weights[ptr:ptr + num_bn_biases])
+        ptr += num_bn_biases
+
+        #Cast the loaded weights into dims of model weights.
         bn_biases = bn_biases.view_as(bn.bias.data)
         bn_weights = bn_weights.view_as(bn.weight.data)
         bn_running_mean = bn_running_mean.view_as(bn.running_mean)
@@ -43,35 +44,36 @@ def copy_weights(bn, conv, ptr, weights, use_bn=True):
     else:
         #Number of biases
         num_biases = conv.bias.numel()
-    
+
         #Load the weights
-        conv_biases = torch.from_numpy(weights[ptr: ptr + num_biases])
+        conv_biases = torch.from_numpy(weights[ptr:ptr + num_biases])
         ptr = ptr + num_biases
-        
+
         #reshape the loaded weights according to the dims of the model weights
         conv_biases = conv_biases.view_as(conv.bias.data)
-        
+
         #Finally copy the data
         conv.bias.data.copy_(conv_biases)
-    
+
     #Let us load the weights for the Convolutional layers
     num_weights = conv.weight.numel()
-    conv_weights = torch.from_numpy(weights[ptr:ptr+num_weights])
+    conv_weights = torch.from_numpy(weights[ptr:ptr + num_weights])
     ptr = ptr + num_weights
 
     conv_weights = conv_weights.view_as(conv.weight.data)
     conv.weight.data.copy_(conv_weights)
     return ptr
 
+
 def load_weights_darknet53(weightfile, yolov3):
     fp = open(weightfile, "rb")
-    #The first 5 values are header information 
+    #The first 5 values are header information
     # 1. Major version number
     # 2. Minor Version Number
-    # 3. Subversion number 
-    # 4. IMages seen 
-    header = np.fromfile(fp, dtype = np.int32, count = 5)
-    weights = np.fromfile(fp, dtype = np.float32)
+    # 3. Subversion number
+    # 4. IMages seen
+    header = np.fromfile(fp, dtype=np.int32, count=5)
+    weights = np.fromfile(fp, dtype=np.float32)
     print(len(weights))
     ptr = 0
     first_conv = yolov3.conv
@@ -80,7 +82,10 @@ def load_weights_darknet53(weightfile, yolov3):
     # first conv copy
     ptr = copy_weights(bn, conv, ptr, weights)
 
-    layers = [yolov3.layer1, yolov3.layer2, yolov3.layer3, yolov3.layer4, yolov3.layer5]
+    layers = [
+        yolov3.layer1, yolov3.layer2, yolov3.layer3, yolov3.layer4,
+        yolov3.layer5
+    ]
     for layer in layers:
         for i in range(len(layer)):
             if i == 0:
@@ -97,21 +102,23 @@ def load_weights_darknet53(weightfile, yolov3):
     print(ptr)
     fp.close()
 
+
 def load_weights(weightfile, yolov3, version):
     if version == "voc" or version == "coco":
         load_weights_yolov3(weightfile, yolov3)
     elif version == "darknet53":
-        load_weights_darknet53(weightfile, yolov3)          
+        load_weights_darknet53(weightfile, yolov3)
+
 
 def load_weights_yolov3(weightfile, yolov3):
     fp = open(weightfile, "rb")
-    #The first 5 values are header information 
+    #The first 5 values are header information
     # 1. Major version number
     # 2. Minor Version Number
-    # 3. Subversion number 
-    # 4, 5. IMages seen 
-    header = np.fromfile(fp, dtype = np.int32, count = 5)
-    weights = np.fromfile(fp, dtype = np.float32)
+    # 3. Subversion number
+    # 4, 5. IMages seen
+    header = np.fromfile(fp, dtype=np.int32, count=5)
+    weights = np.fromfile(fp, dtype=np.float32)
     print(len(weights))
     ptr = 0
     extractor = yolov3.extractor
@@ -121,7 +128,10 @@ def load_weights_yolov3(weightfile, yolov3):
     # first conv copy
     ptr = copy_weights(bn, conv, ptr, weights)
 
-    layers = [extractor.layer1, extractor.layer2, extractor.layer3, extractor.layer4, extractor.layer5]
+    layers = [
+        extractor.layer1, extractor.layer2, extractor.layer3, extractor.layer4,
+        extractor.layer5
+    ]
     for layer in layers:
         for i in range(len(layer)):
             if i == 0:
@@ -175,40 +185,51 @@ def load_weights_yolov3(weightfile, yolov3):
             conv = predict_conv_list3[i].conv
             ptr = copy_weights(bn, conv, ptr, weights)
     print(ptr)
-    fp.close()               
+    fp.close()
 
 
 def arg_parse():
     """
     Parse arguments to the train module
     """
-    parser = argparse.ArgumentParser(
-        description='Yolov3 pytorch Training')
-    parser.add_argument('--input_wh', default=(416, 416),
-                        help='input size.')
-    parser.add_argument('--version', '--version', default='darknet53',
-                        help='voc, coco, darknet53')
-    parser.add_argument('--weights', default='./weights/darknet53.conv.74', help='pretrained base model')
-    parser.add_argument('--save_name', default='./weights/convert_yolov3_coco.pth', help='save name')
+    parser = argparse.ArgumentParser(description='Yolov3 pytorch Training')
+    parser.add_argument('--input_wh', default=(416, 416), help='input size.')
+    parser.add_argument(
+        '--version',
+        '--version',
+        default='darknet53',
+        help='voc, coco, darknet53')
+    parser.add_argument(
+        '--weights',
+        default='./weights/darknet53.conv.74',
+        help='pretrained base model')
+    parser.add_argument(
+        '--save_name',
+        default='./weights/convert_yolov3_coco.pth',
+        help='save name')
 
     return parser.parse_args()
 
+
 def load_weights_darknet19(weightfile, darknet19):
     fp = open(weightfile, "rb")
-    #The first 4 values are header information 
+    #The first 4 values are header information
     # 1. Major version number
     # 2. Minor Version Number
-    # 3. Subversion number 
-    # 4. IMages seen 
-    header = np.fromfile(fp, dtype = np.int32, count=4)
-    weights = np.fromfile(fp, dtype = np.float32)
+    # 3. Subversion number
+    # 4. IMages seen
+    header = np.fromfile(fp, dtype=np.int32, count=4)
+    weights = np.fromfile(fp, dtype=np.float32)
     ptr = 0
     first_conv = darknet19.conv
     bn = first_conv.bn
     conv = first_conv.conv
     # first conv copy
     ptr = copy_weights(bn, conv, ptr, weights)
-    layers = [darknet19.layer1, darknet19.layer2, darknet19.layer3, darknet19.layer4, darknet19.layer5]
+    layers = [
+        darknet19.layer1, darknet19.layer2, darknet19.layer3, darknet19.layer4,
+        darknet19.layer5
+    ]
     for layer in layers:
         for i in range(len(layer)):
             if i == 0:
@@ -219,6 +240,7 @@ def load_weights_darknet19(weightfile, darknet19):
                 ptr = copy_weights(bn, conv, ptr, weights)
     fp.close()
 
+
 if __name__ == '__main__':
     args = arg_parse()
     weightfile = args.weights
@@ -227,13 +249,15 @@ if __name__ == '__main__':
     save_name = args.save_name
     if version == "voc":
         cfg = voc_config
-        yolov3 = Yolov3("train", input_wh, cfg["anchors"], cfg["anchors_mask"], cfg["num_classes"])
+        yolov3 = Yolov3("train", input_wh, cfg["anchors"], cfg["anchors_mask"],
+                        cfg["num_classes"])
     elif version == "coco":
         cfg = coco_config
-        yolov3 = Yolov3("train", input_wh, cfg["anchors"], cfg["anchors_mask"], cfg["num_classes"])
+        yolov3 = Yolov3("train", input_wh, cfg["anchors"], cfg["anchors_mask"],
+                        cfg["num_classes"])
     elif version == "darknet53":
         cfg = voc_config
-        num_blocks = [1,2,8,8,4]
+        num_blocks = [1, 2, 8, 8, 4]
         yolov3 = Darknet53(num_blocks)
     else:
         print("Unkown version !!!")
@@ -244,6 +268,3 @@ if __name__ == '__main__':
     # name = "convert_yolo_" + version + ".pth"
     # save_path = os.path.join("./weights", name)
     torch.save(darknet53.state_dict(), save_name)
-
-
-

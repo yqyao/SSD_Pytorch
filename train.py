@@ -15,33 +15,46 @@ from utils.nms_wrapper import nms, soft_nms
 from configs.config import cfg, cfg_from_file
 import numpy as np
 import time
-import os 
+import os
 import sys
 import pickle
 import datetime
 from models.model_builder import SSD
 import yaml
 
-def arg_parse():
-    parser = argparse.ArgumentParser(
-        description='SSD Training')
-    parser.add_argument(
-        '--cfg', dest='cfg_file', required=True,
-        help='Config file for training (and optionally testing)')
-    parser.add_argument('--num_workers', default=8,
-                        type=int, help='Number of workers used in dataloading')
-    parser.add_argument('--ngpu', default=2, type=int, help='gpus')
-    parser.add_argument('--resume_net', default=None, help='resume net for retraining')
-    parser.add_argument('--resume_epoch', default=0,
-                        type=int, help='resume iter for retraining')
 
-    parser.add_argument('--save_folder', default='./weights/',
-                        help='Location to save checkpoint models')
+def arg_parse():
+    parser = argparse.ArgumentParser(description='SSD Training')
+    parser.add_argument(
+        '--cfg',
+        dest='cfg_file',
+        required=True,
+        help='Config file for training (and optionally testing)')
+    parser.add_argument(
+        '--num_workers',
+        default=8,
+        type=int,
+        help='Number of workers used in dataloading')
+    parser.add_argument('--ngpu', default=2, type=int, help='gpus')
+    parser.add_argument(
+        '--resume_net', default=None, help='resume net for retraining')
+    parser.add_argument(
+        '--resume_epoch',
+        default=0,
+        type=int,
+        help='resume iter for retraining')
+
+    parser.add_argument(
+        '--save_folder',
+        default='./weights/',
+        help='Location to save checkpoint models')
     args = parser.parse_args()
     return args
 
-def adjust_learning_rate(optimizer, epoch, step_epoch, gamma, epoch_size, iteration):
-    """Sets the learning rate 
+
+def adjust_learning_rate(optimizer, epoch, step_epoch, gamma, epoch_size,
+                         iteration):
+    """Sets the learning rate
     # Adapted from PyTorch Imagenet example:
     # https://github.com/pytorch/examples/blob/master/imagenet/main.py
     """
@@ -49,7 +62,8 @@ def adjust_learning_rate(optimizer, epoch, step_epoch, gamma, epoch_size, iterat
     if epoch <= cfg.TRAIN.WARMUP_EPOCH:
         if cfg.TRAIN.WARMUP:
             iteration += (epoch_size * (epoch - 1))
-            lr = 1e-6 + (cfg.SOLVER.BASE_LR - 1e-6) * iteration / (epoch_size * cfg.TRAIN.WARMUP_EPOCH) 
+            lr = 1e-6 + (cfg.SOLVER.BASE_LR - 1e-6) * iteration / (
+                epoch_size * cfg.TRAIN.WARMUP_EPOCH)
         else:
             lr = cfg.SOLVER.BASE_LR
     else:
@@ -58,22 +72,25 @@ def adjust_learning_rate(optimizer, epoch, step_epoch, gamma, epoch_size, iterat
             div = len(step_epoch) - 1
         else:
             for idx, v in enumerate(step_epoch):
-                if epoch > step_epoch[idx] and epoch <= step_epoch[idx+1]:
-                    div = idx 
+                if epoch > step_epoch[idx] and epoch <= step_epoch[idx + 1]:
+                    div = idx
                     break
-        lr = cfg.SOLVER.BASE_LR * (gamma ** div)
+        lr = cfg.SOLVER.BASE_LR * (gamma**div)
 
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     return lr
 
-def train(train_loader, net, criterion, optimizer, epoch, epoch_step, gamma, end_epoch, cfg):
+
+def train(train_loader, net, criterion, optimizer, epoch, epoch_step, gamma,
+          end_epoch, cfg):
     net.train()
     begin = time.time()
     epoch_size = len(train_loader)
     for iteration, (imgs, targets, _) in enumerate(train_loader):
         t0 = time.time()
-        lr = adjust_learning_rate(optimizer, epoch, epoch_step, gamma, epoch_size, iteration)
+        lr = adjust_learning_rate(optimizer, epoch, epoch_step, gamma,
+                                  epoch_size, iteration)
         imgs = imgs.cuda()
         imgs.requires_grad_()
         with torch.no_grad():
@@ -82,50 +99,71 @@ def train(train_loader, net, criterion, optimizer, epoch, epoch_step, gamma, end
         optimizer.zero_grad()
         if not cfg.MODEL.REFINE:
             ssd_criterion = criterion[0]
-            loss_l, loss_c = ssd_criterion(output, targets) 
+            loss_l, loss_c = ssd_criterion(output, targets)
             loss = loss_l + loss_c
         else:
             arm_criterion = criterion[0]
             odm_criterion = criterion[1]
             arm_loss_l, arm_loss_c = arm_criterion(output, targets)
-            odm_loss_l, odm_loss_c = odm_criterion(output, targets, use_arm=True, filter_object=True)
+            odm_loss_l, odm_loss_c = odm_criterion(
+                output, targets, use_arm=True, filter_object=True)
             loss = arm_loss_l + arm_loss_c + odm_loss_l + odm_loss_c
         loss.backward()
         optimizer.step()
         t1 = time.time()
         iteration_time = t1 - t0
-        all_time = ((end_epoch - epoch) * epoch_size + (epoch_size - iteration)) * iteration_time
+        all_time = ((end_epoch - epoch) * epoch_size +
+                    (epoch_size - iteration)) * iteration_time
         eta = str(datetime.timedelta(seconds=int(all_time)))
         if iteration % 10 == 0:
             if not cfg.MODEL.REFINE:
-                print('Epoch:' + repr(epoch) + ' || epochiter: ' + repr(iteration % epoch_size) + '/' + repr(epoch_size) + ' || L: %.4f C: %.4f||' % (loss_l.item(), loss_c.item()) + 
-                'iteration time: %.4f sec. ||' % (t1 - t0) + 'LR: %.5f' % (lr)
-                + ' || eta time: {}'.format(eta))
+                print('Epoch:' + repr(epoch) + ' || epochiter: ' +
+                      repr(iteration % epoch_size) + '/' + repr(epoch_size) +
+                      ' || L: %.4f C: %.4f||' %
+                      (loss_l.item(), loss_c.item()) +
+                      'iteration time: %.4f sec. ||' % (t1 - t0) +
+                      'LR: %.5f' % (lr) + ' || eta time: {}'.format(eta))
             else:
-                print('Epoch:' + repr(epoch) + ' || epochiter: ' + repr(iteration % epoch_size) + '/' + repr(epoch_size) + 
-                    '|| arm_L: %.4f arm_C: %.4f||' % (arm_loss_l.item(),arm_loss_c.item()) + ' odm_L: %.4f odm_C: %.4f||' % (odm_loss_l.item(), odm_loss_c.item()) + 
-                  ' loss: %.4f||' % (loss.item()) +
-                'iteration time: %.4f sec. ||' % (t1 - t0) + 'LR: %.5f' % (lr)
-                 + ' || eta time: {}'.format(eta))                
+                print('Epoch:' + repr(epoch) + ' || epochiter: ' +
+                      repr(iteration % epoch_size) + '/' + repr(epoch_size) +
+                      '|| arm_L: %.4f arm_C: %.4f||' %
+                      (arm_loss_l.item(), arm_loss_c.item()) +
+                      ' odm_L: %.4f odm_C: %.4f||' %
+                      (odm_loss_l.item(), odm_loss_c.item()) +
+                      ' loss: %.4f||' % (loss.item()) +
+                      'iteration time: %.4f sec. ||' % (t1 - t0) +
+                      'LR: %.5f' % (lr) + ' || eta time: {}'.format(eta))
+
 
 def save_checkpoint(net, epoch, size, optimizer):
-    save_name = os.path.join(args.save_folder, cfg.MODEL.TYPE + "_epoch_{}_{}".format(str(epoch), str(size))+ '.pth')
+    save_name = os.path.join(
+        args.save_folder,
+        cfg.MODEL.TYPE + "_epoch_{}_{}".format(str(epoch), str(size)) + '.pth')
     torch.save({
-        'epoch' : epoch,
-        'size' : size,
+        'epoch': epoch,
+        'size': size,
         'batch_size': cfg.TRAIN.BATCH_SIZE,
         'model': net.state_dict(),
-        'optimizer': optimizer.state_dict()}, save_name)
+        'optimizer': optimizer.state_dict()
+    }, save_name)
 
-def eval_net(val_dataset, val_loader, net, detector, cfg, transform, max_per_image=300, thresh=0.01, batch_size=1):
+
+def eval_net(val_dataset,
+             val_loader,
+             net,
+             detector,
+             cfg,
+             transform,
+             max_per_image=300,
+             thresh=0.01,
+             batch_size=1):
     net.eval()
     num_images = len(val_dataset)
     num_classes = cfg.MODEL.NUM_CLASSES
     eval_save_folder = "./eval/"
     if not os.path.exists(eval_save_folder):
         os.mkdir(eval_save_folder)
-    all_boxes = [[[] for _ in range(num_images)]
-                 for _ in range(num_classes)]
+    all_boxes = [[[] for _ in range(num_images)] for _ in range(num_classes)]
     det_file = os.path.join(eval_save_folder, 'detections.pkl')
     st = time.time()
     for idx, (imgs, _, img_info) in enumerate(val_loader):
@@ -153,8 +191,9 @@ def eval_net(val_dataset, val_loader, net, detector, cfg, transform, max_per_ima
                         continue
                     c_bboxes = boxes_[inds]
                     c_scores = scores_[inds, j]
-                    c_dets = np.hstack((c_bboxes, c_scores[:, np.newaxis])).astype(
-                        np.float32, copy=False)
+                    c_dets = np.hstack((c_bboxes,
+                                        c_scores[:, np.newaxis])).astype(
+                                            np.float32, copy=False)
                     keep = nms(c_dets, cfg.TEST.NMS_OVERLAP, force_cpu=True)
                     keep = keep[:50]
                     c_dets = c_dets[keep, :]
@@ -164,19 +203,20 @@ def eval_net(val_dataset, val_loader, net, detector, cfg, transform, max_per_ima
             nms_time = t3 - t2
             forward_time = t4 - t1
             if idx % 10 == 0:
-                print('im_detect: {:d}/{:d} {:.3f}s {:.3f}s {:.3f}s'
-                    .format(i + 1, num_images, forward_time, detect_time, nms_time))
-
+                print('im_detect: {:d}/{:d} {:.3f}s {:.3f}s {:.3f}s'.format(
+                    i + 1, num_images, forward_time, detect_time, nms_time))
+    print("detect time: ", time.time() - st)
     with open(det_file, 'wb') as f:
         pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
     print('Evaluating detections')
     val_dataset.evaluate_detections(all_boxes, eval_save_folder)
-    print("detect time: ", time.time() - st)
 
-def main():      
+
+
+def main():
     global args
     args = arg_parse()
-    cfg_from_file(args.cfg_file)  
+    cfg_from_file(args.cfg_file)
     save_folder = args.save_folder
     batch_size = cfg.TRAIN.BATCH_SIZE
     bgr_means = cfg.TRAIN.BGR_MEAN
@@ -209,8 +249,11 @@ def main():
         size_cfg = cfg.SMALL
     else:
         size_cfg = cfg.BIG
-    optimizer = optim.SGD(net.parameters(), lr=cfg.SOLVER.BASE_LR,
-                      momentum=momentum, weight_decay=weight_decay)
+    optimizer = optim.SGD(
+        net.parameters(),
+        lr=cfg.SOLVER.BASE_LR,
+        momentum=momentum,
+        weight_decay=weight_decay)
     if args.resume_net != None:
         checkpoint = torch.load(args.resume_net)
         state_dict = checkpoint['model']
@@ -219,7 +262,7 @@ def main():
         for k, v in state_dict.items():
             head = k[:7]
             if head == 'module.':
-                name = k[7:] # remove `module.`
+                name = k[7:]  # remove `module.`
             else:
                 name = k
             new_state_dict[name] = v
@@ -247,28 +290,40 @@ def main():
     ValTransform = BaseTransform(size_cfg.IMG_WH, bgr_means, (2, 0, 1))
 
     val_dataset = trainvalDataset(dataroot, valSet, ValTransform, dataset_name)
-    val_loader = data.DataLoader(val_dataset,
-                                 batch_size,
-                                 shuffle=False,
-                                 num_workers=args.num_workers,
-                                 collate_fn=detection_collate)
+    val_loader = data.DataLoader(
+        val_dataset,
+        batch_size,
+        shuffle=False,
+        num_workers=args.num_workers,
+        collate_fn=detection_collate)
 
-
-    for epoch in range(start_epoch+1, end_epoch+1):
-        train_dataset = trainvalDataset(dataroot, trainSet, TrainTransform, dataset_name)
+    for epoch in range(start_epoch + 1, end_epoch + 1):
+        train_dataset = trainvalDataset(dataroot, trainSet, TrainTransform,
+                                        dataset_name)
         epoch_size = len(train_dataset)
-        train_loader = data.DataLoader(train_dataset,
-                                        batch_size,
-                                        shuffle=True,
-                                        num_workers=args.num_workers,
-                                        collate_fn=detection_collate)
-        train(train_loader, net, criterion, optimizer, epoch, epoch_step, gamma, end_epoch, cfg)
+        train_loader = data.DataLoader(
+            train_dataset,
+            batch_size,
+            shuffle=True,
+            num_workers=args.num_workers,
+            collate_fn=detection_collate)
+        train(train_loader, net, criterion, optimizer, epoch, epoch_step,
+              gamma, end_epoch, cfg)
         if (epoch % 10 == 0) or (epoch % 5 == 0 and epoch >= 200):
             save_checkpoint(net, epoch, size, optimizer)
         if (epoch >= 50 and epoch % 10 == 0):
-            eval_net(val_dataset, val_loader, net, detector, cfg, ValTransform, top_k, thresh=thresh, batch_size=batch_size)
+            eval_net(
+                val_dataset,
+                val_loader,
+                net,
+                detector,
+                cfg,
+                ValTransform,
+                top_k,
+                thresh=thresh,
+                batch_size=batch_size)
     save_checkpoint(net, end_epoch, size, optimizer)
+
+
 if __name__ == '__main__':
     main()
-
-

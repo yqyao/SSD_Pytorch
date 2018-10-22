@@ -8,16 +8,18 @@ if torch.cuda.is_available():
     import torch.backends.cudnn as cudnn
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
-
 import torch.nn.init as init
+
 
 def xavier(param):
     init.xavier_uniform_(param)
+
 
 # def weights_init(m):
 #     if isinstance(m, nn.Conv2d):
 #         xavier(m.weight.data)
 #         m.bias.data.zero_()
+
 
 def weights_init(m):
     for key in m.state_dict():
@@ -29,14 +31,17 @@ def weights_init(m):
         elif key.split('.')[-1] == 'bias':
             m.state_dict()[key][...] = 0
 
+
 def get_color(c, x, max_val):
-    colors = torch.FloatTensor([[1,0,1],[0,0,1],[0,1,1],[0,1,0],[1,1,0],[1,0,0]])
+    colors = torch.FloatTensor([[1, 0, 1], [0, 0, 1], [0, 1, 1], [0, 1, 0],
+                                [1, 1, 0], [1, 0, 0]])
     ratio = float(x) / max_val * 5
     i = int(math.floor(ratio))
     j = int(math.ceil(ratio))
     ratio = ratio - i
-    r = (1-ratio) * colors[i][c] + ratio * colors[j][c]
-    return int(r*255)
+    r = (1 - ratio) * colors[i][c] + ratio * colors[j][c]
+    return int(r * 255)
+
 
 def draw_rects(img, rects, classes):
     for rect in rects:
@@ -48,16 +53,21 @@ def draw_rects(img, rects, classes):
             label = "{0}".format(classes[cls_id])
             class_len = len(classes)
             offset = cls_id * 123457 % class_len
-            red   = get_color(2, offset, class_len)
+            red = get_color(2, offset, class_len)
             green = get_color(1, offset, class_len)
-            blue  = get_color(0, offset, class_len)        
+            blue = get_color(0, offset, class_len)
             color = (blue, green, red)
             cv2.rectangle(img, left_top, right_bottom, color, 2)
-            t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1 , 1)[0]
-            right_bottom = left_top[0] + t_size[0] + 60, left_top[1] - t_size[1] - 10
+            t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1, 1)[0]
+            right_bottom = left_top[0] + t_size[0] + 60, left_top[1] - t_size[
+                1] - 10
             cv2.rectangle(img, left_top, right_bottom, color, -1)
-            cv2.putText(img, str(label)+": "+str(score), (left_top[0], left_top[1] - t_size[1] + 8), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1)
-    return img        
+            cv2.putText(img,
+                        str(label) + ": " + str(score),
+                        (left_top[0], left_top[1] - t_size[1] + 8),
+                        cv2.FONT_HERSHEY_PLAIN, 1, [225, 255, 255], 1)
+    return img
+
 
 def point_form(boxes):
     """ Convert prior_boxes to (xmin, ymin, xmax, ymax)
@@ -67,8 +77,12 @@ def point_form(boxes):
     Return:
         boxes: (tensor) Converted xmin, ymin, xmax, ymax form of boxes.
     """
-    return torch.cat((boxes[:, :2] - boxes[:, 2:]/2,     # xmin, ymin
-                     boxes[:, :2] + boxes[:, 2:]/2), 1)  # xmax, ymax
+    return torch.cat(
+        (
+            boxes[:, :2] - boxes[:, 2:] / 2,  # xmin, ymin
+            boxes[:, :2] + boxes[:, 2:] / 2),
+        1)  # xmax, ymax
+
 
 def center_size(boxes):
     """ Convert prior_boxes to (cx, cy, w, h)
@@ -78,7 +92,9 @@ def center_size(boxes):
     Return:
         boxes: (tensor) Converted xmin, ymin, xmax, ymax form of boxes.
     """
-    return torch.cat([(boxes[:, 2:] + boxes[:, :2])/2, boxes[:, 2:] - boxes[:, :2]], 1)  # w, h
+    return torch.cat(
+        [(boxes[:, 2:] + boxes[:, :2]) / 2, boxes[:, 2:] - boxes[:, :2]],
+        1)  # w, h
 
 
 def intersect(box_a, box_b):
@@ -116,14 +132,17 @@ def jaccard(box_a, box_b):
         jaccard overlap: (tensor) Shape: [box_a.size(0), box_b.size(0)]
     """
     inter = intersect(box_a, box_b)
-    area_a = ((box_a[:, 2]-box_a[:, 0]) *
-              (box_a[:, 3]-box_a[:, 1])).unsqueeze(1).expand_as(inter)  # [A,B]
-    area_b = ((box_b[:, 2]-box_b[:, 0]) *
-              (box_b[:, 3]-box_b[:, 1])).unsqueeze(0).expand_as(inter)  # [A,B]
+    area_a = ((box_a[:, 2] - box_a[:, 0]) *
+              (box_a[:, 3] - box_a[:, 1])).unsqueeze(1).expand_as(
+                  inter)  # [A,B]
+    area_b = ((box_b[:, 2] - box_b[:, 0]) *
+              (box_b[:, 3] - box_b[:, 1])).unsqueeze(0).expand_as(
+                  inter)  # [A,B]
     union = area_a + area_b - inter
     return inter / union  # [A,B]
 
-def matrix_iou(a,b):
+
+def matrix_iou(a, b):
     """
     return iou of a and b, numpy version for data augenmentation
     """
@@ -154,10 +173,7 @@ def match(threshold, truths, priors, variances, labels, loc_t, conf_t, idx):
         The matched indices corresponding to 1)location and 2)confidence preds.
     """
     # jaccard index
-    overlaps = jaccard(
-        truths,
-        point_form(priors)
-    )
+    overlaps = jaccard(truths, point_form(priors))
     # print(overlaps.size())
     # overlaps = matrix_iou(truths, point_form(priors))
     # (Bipartite Matching)
@@ -180,15 +196,24 @@ def match(threshold, truths, priors, variances, labels, loc_t, conf_t, idx):
     # ensure every gt matches with its prior of max overlap
     for j in range(best_prior_idx.size(0)):
         best_truth_idx[best_prior_idx[j]] = j
-    matches = truths[best_truth_idx]          # Shape: [num_priors,4]
-    conf = labels[best_truth_idx]          # Shape: [num_priors]
+    matches = truths[best_truth_idx]  # Shape: [num_priors,4]
+    conf = labels[best_truth_idx]  # Shape: [num_priors]
     conf[best_truth_overlap < threshold] = 0  # label as background
     loc = encode(matches, priors, variances)
-    loc_t[idx] = loc    # [num_priors,4] encoded offsets to learn
+    loc_t[idx] = loc  # [num_priors,4] encoded offsets to learn
     conf_t[idx] = conf  # [num_priors] top class label for each prior
 
 
-def refine_match(threshold, truths, priors, variances, labels, loc_t, conf_t, idx, arm_loc_data, use_weight=False):
+def refine_match(threshold,
+                 truths,
+                 priors,
+                 variances,
+                 labels,
+                 loc_t,
+                 conf_t,
+                 idx,
+                 arm_loc_data,
+                 use_weight=False):
     """Match each prior box with the ground truth box of the highest jaccard
     overlap, encode the bounding boxes, then return the matched indices
     corresponding to both confidence and location preds.
@@ -206,11 +231,8 @@ def refine_match(threshold, truths, priors, variances, labels, loc_t, conf_t, id
         The matched indices corresponding to 1)location and 2)confidence preds.
     """
     # jaccard index
-    decoded_boxes = decode(arm_loc_data, priors, variances)    
-    overlaps = jaccard(
-        truths,
-        decoded_boxes
-    )
+    decoded_boxes = decode(arm_loc_data, priors, variances)
+    overlaps = jaccard(truths, decoded_boxes)
     # (Bipartite Matching)
     # [1,num_objects] best prior for each ground truth
     best_prior_overlap, best_prior_idx = overlaps.max(1, keepdim=True)
@@ -222,19 +244,18 @@ def refine_match(threshold, truths, priors, variances, labels, loc_t, conf_t, id
     best_prior_idx.squeeze_(1)
     best_prior_overlap.squeeze_(1)
 
-
     best_truth_overlap.index_fill_(0, best_prior_idx, 2)  # ensure best prior
 
     # TODO refactor: index  best_prior_idx with long tensor
     # ensure every gt matches with its prior of max overlap
     for j in range(best_prior_idx.size(0)):
         best_truth_idx[best_prior_idx[j]] = j
-    matches = truths[best_truth_idx]          # Shape: [num_priors,4]
-    conf = labels[best_truth_idx]          # Shape: [num_priors]
+    matches = truths[best_truth_idx]  # Shape: [num_priors,4]
+    conf = labels[best_truth_idx]  # Shape: [num_priors]
     conf[best_truth_overlap < threshold] = 0  # label as background
     loc = encode(matches, center_size(decoded_boxes), variances)
     # loc = encode(matches, priors, variances)
-    loc_t[idx] = loc    # [num_priors,4] encoded offsets to learn
+    loc_t[idx] = loc  # [num_priors,4] encoded offsets to learn
     conf_t[idx] = conf  # [num_priors] top class label for each prior
     if use_weight:
         over_copy = best_truth_overlap.cpu().numpy().copy()
@@ -244,18 +265,15 @@ def refine_match(threshold, truths, priors, variances, labels, loc_t, conf_t, id
 
 
 def get_prior_weigths(threshold, truths, defaults, variance, loc_data):
-    
-    decoded_boxes = decode(loc_data, defaults, variance)    
-    overlaps = jaccard(
-        truths,
-        decoded_boxes
-    )
+
+    decoded_boxes = decode(loc_data, defaults, variance)
+    overlaps = jaccard(truths, decoded_boxes)
     # overlaps = jaccard(
     #     truths,
     #     point_form(defaults)
     # )
 
-    best_truth_overlap, best_truth_idx = overlaps.max(0, keepdim=True)    
+    best_truth_overlap, best_truth_idx = overlaps.max(0, keepdim=True)
     best_truth_idx.squeeze_(0)
     best_truth_overlap.squeeze_(0)
 
@@ -279,7 +297,7 @@ def encode(matched, priors, variances):
     """
 
     # dist b/t match center and prior's center
-    g_cxcy = (matched[:, :2] + matched[:, 2:])/2 - priors[:, :2]
+    g_cxcy = (matched[:, :2] + matched[:, 2:]) / 2 - priors[:, :2]
     # encode variance
     g_cxcy /= (variances[0] * priors[:, 2:])
     # match wh / prior wh
@@ -303,7 +321,8 @@ def encode_multi(matched, priors, offsets, variances):
     """
 
     # dist b/t match center and prior's center
-    g_cxcy = (matched[:, :2] + matched[:, 2:])/2 - priors[:, :2] - offsets[:,:2]
+    g_cxcy = (
+        matched[:, :2] + matched[:, 2:]) / 2 - priors[:, :2] - offsets[:, :2]
     # encode variance
     #g_cxcy /= (variances[0] * priors[:, 2:])
     g_cxcy.div_(variances[0] * offsets[:, 2:])
@@ -312,6 +331,7 @@ def encode_multi(matched, priors, offsets, variances):
     g_wh = torch.log(g_wh) / variances[1]
     # return target for smooth_l1_loss
     return torch.cat([g_cxcy, g_wh], 1)  # [num_priors,4]
+
 
 # Adapted from https://github.com/Hakuyume/chainer-ssd
 def decode(loc, priors, variances):
@@ -327,12 +347,13 @@ def decode(loc, priors, variances):
         decoded bounding box predictions
     """
 
-    boxes = torch.cat((
-        priors[:, :2] + loc[:, :2] * variances[0] * priors[:, 2:],
-        priors[:, 2:] * torch.exp(loc[:, 2:] * variances[1])), 1)
+    boxes = torch.cat(
+        (priors[:, :2] + loc[:, :2] * variances[0] * priors[:, 2:],
+         priors[:, 2:] * torch.exp(loc[:, 2:] * variances[1])), 1)
     boxes[:, :2] -= boxes[:, 2:] / 2
     boxes[:, 2:] += boxes[:, :2]
     return boxes
+
 
 def decode_multi(loc, priors, offsets, variances):
     """Decode locations from predictions using priors to undo
@@ -347,12 +368,14 @@ def decode_multi(loc, priors, offsets, variances):
         decoded bounding box predictions
     """
 
-    boxes = torch.cat((
-        priors[:, :2] + offsets[:,:2]+ loc[:, :2] * variances[0] * offsets[:, 2:],
-        priors[:, 2:] * torch.exp(loc[:, 2:] * variances[1])), 1)
+    boxes = torch.cat((priors[:, :2] + offsets[:, :2] +
+                       loc[:, :2] * variances[0] * offsets[:, 2:],
+                       priors[:, 2:] * torch.exp(loc[:, 2:] * variances[1])),
+                      1)
     boxes[:, :2] -= boxes[:, 2:] / 2
     boxes[:, 2:] += boxes[:, :2]
     return boxes
+
 
 def log_sum_exp(x):
     """Utility function for computing log_sum_exp while determining
@@ -362,7 +385,7 @@ def log_sum_exp(x):
         x (Variable(tensor)): conf_preds from conf layers
     """
     x_max = x.data.max()
-    return torch.log(torch.sum(torch.exp(x-x_max), 1, keepdim=True)) + x_max
+    return torch.log(torch.sum(torch.exp(x - x_max), 1, keepdim=True)) + x_max
 
 
 # Original author: Francisco Massa:
@@ -425,11 +448,11 @@ def nms(boxes, scores, overlap=0.5, top_k=200):
         # check sizes of xx1 and xx2.. after each iteration
         w = torch.clamp(w, min=0.0)
         h = torch.clamp(h, min=0.0)
-        inter = w*h
+        inter = w * h
         # IoU = i / (area(a) + area(b) - i)
         rem_areas = torch.index_select(area, 0, idx)  # load remaining areas)
         union = (rem_areas - inter) + area[i]
-        IoU = inter/union  # store result in iou
+        IoU = inter / union  # store result in iou
         # keep only elements with an IoU <= overlap
         idx = idx[IoU.le(overlap)]
     return keep, count

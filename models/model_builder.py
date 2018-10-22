@@ -7,9 +7,10 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from layers import *
 import os
-from utils.box_utils import weights_init
+from models.model_helper import weights_init
 import importlib
 from layers.functions.prior_layer import PriorLayer
+
 
 def get_func(func_name):
     """Helper to return a function object by name. func_name must identify a
@@ -30,6 +31,7 @@ def get_func(func_name):
     except Exception:
         print('Failed to find function: %s', func_name)
         raise
+
 
 class SSD(nn.Module):
     """Single Shot Multibox Architecture
@@ -56,7 +58,8 @@ class SSD(nn.Module):
             self.odm_conf.apply(weights_init)
         if self.cfg.MODEL.LOAD_PRETRAINED_WEIGHTS:
             weights = torch.load(self.cfg.MODEL.PRETRAIN_WEIGHTS)
-            print("load pretrain model {}".format(self.cfg.MODEL.PRETRAIN_WEIGHTS))
+            print("load pretrain model {}".format(
+                self.cfg.MODEL.PRETRAIN_WEIGHTS))
             if self.cfg.MODEL.TYPE.split('_')[-1] == 'vgg':
                 self.extractor.vgg.load_state_dict(weights)
             else:
@@ -74,14 +77,15 @@ class SSD(nn.Module):
         self.prior_layer = PriorLayer(cfg)
         self.priorbox = PriorBox(cfg)
         self.priors = self.priorbox.forward()
-        self.extractor = get_func(cfg.MODEL.CONV_BODY)(self.size, cfg.TRAIN.CHANNEL_SIZE)
+        self.extractor = get_func(cfg.MODEL.CONV_BODY)(self.size,
+                                                       cfg.TRAIN.CHANNEL_SIZE)
         if cfg.MODEL.REFINE:
             self.odm_channels = size_cfg.ODM_CHANNELS
             self.arm_num_classes = 2
             self.odm_loc = nn.ModuleList()
             self.odm_conf = nn.ModuleList()
         self.arm_loc = nn.ModuleList()
-        self.arm_conf = nn.ModuleList() 
+        self.arm_conf = nn.ModuleList()
         self.arm_channels = size_cfg.ARM_CHANNELS
         self.num_anchors = size_cfg.NUM_ANCHORS
         self.input_fixed = size_cfg.INPUT_FIXED
@@ -89,19 +93,54 @@ class SSD(nn.Module):
         self.arm_conf = nn.ModuleList()
         for i in range(len(self.arm_channels)):
             if cfg.MODEL.REFINE:
-                self.arm_loc += [nn.Conv2d(self.arm_channels[i], self.num_anchors[i]*4, kernel_size=3, padding=1)]
-                self.arm_conf += [nn.Conv2d(self.arm_channels[i], self.num_anchors[i]* self.arm_num_classes, kernel_size=3, padding=1)]
-                self.odm_loc += [nn.Conv2d(self.odm_channels[i],
-                                self.num_anchors[i]*4, kernel_size=3, padding=1)]
-                self.odm_conf += [nn.Conv2d(self.odm_channels[i], self.num_anchors[i]* self.num_classes, kernel_size=3, padding=1)]
+                self.arm_loc += [
+                    nn.Conv2d(
+                        self.arm_channels[i],
+                        self.num_anchors[i] * 4,
+                        kernel_size=3,
+                        padding=1)
+                ]
+                self.arm_conf += [
+                    nn.Conv2d(
+                        self.arm_channels[i],
+                        self.num_anchors[i] * self.arm_num_classes,
+                        kernel_size=3,
+                        padding=1)
+                ]
+                self.odm_loc += [
+                    nn.Conv2d(
+                        self.odm_channels[i],
+                        self.num_anchors[i] * 4,
+                        kernel_size=3,
+                        padding=1)
+                ]
+                self.odm_conf += [
+                    nn.Conv2d(
+                        self.odm_channels[i],
+                        self.num_anchors[i] * self.num_classes,
+                        kernel_size=3,
+                        padding=1)
+                ]
             else:
-                self.arm_loc += [nn.Conv2d(self.arm_channels[i], self.num_anchors[i]*4, kernel_size=3, padding=1)]
-                self.arm_conf += [nn.Conv2d(self.arm_channels[i], self.num_anchors[i]* self.num_classes, kernel_size=3, padding=1)] 
-        if cfg.TRAIN.TRAIN_ON:               
+                self.arm_loc += [
+                    nn.Conv2d(
+                        self.arm_channels[i],
+                        self.num_anchors[i] * 4,
+                        kernel_size=3,
+                        padding=1)
+                ]
+                self.arm_conf += [
+                    nn.Conv2d(
+                        self.arm_channels[i],
+                        self.num_anchors[i] * self.num_classes,
+                        kernel_size=3,
+                        padding=1)
+                ]
+        if cfg.TRAIN.TRAIN_ON:
             self._init_modules()
 
     def forward(self, x):
- 
+
         arm_loc = list()
         arm_conf = list()
         if self.cfg.MODEL.REFINE:
@@ -123,22 +162,16 @@ class SSD(nn.Module):
         arm_loc = torch.cat([o.view(o.size(0), -1) for o in arm_loc], 1)
         arm_conf = torch.cat([o.view(o.size(0), -1) for o in arm_conf], 1)
         if self.cfg.MODEL.REFINE:
-            output = (
-                arm_loc.view(arm_loc.size(0), -1, 4),
-                arm_conf.view(arm_conf.size(0), -1, self.arm_num_classes),
-                odm_loc.view(odm_loc.size(0), -1, 4),
-                odm_conf.view(odm_conf.size(0), -1, self.num_classes),
-                self.priors if self.input_fixed else self.prior_layer(img_wh, feature_maps_wh)
-            )
-        else:            
-            output = (
-                arm_loc.view(arm_loc.size(0), -1, 4),
-                arm_conf.view(arm_conf.size(0), -1, self.num_classes),
-                self.priors if self.input_fixed else self.prior_layer(img_wh, feature_maps_wh)
-            )
+            output = (arm_loc.view(arm_loc.size(0), -1, 4),
+                      arm_conf.view(
+                          arm_conf.size(0), -1, self.arm_num_classes),
+                      odm_loc.view(odm_loc.size(0), -1, 4),
+                      odm_conf.view(odm_conf.size(0), -1, self.num_classes),
+                      self.priors if self.input_fixed else self.prior_layer(
+                          img_wh, feature_maps_wh))
+        else:
+            output = (arm_loc.view(arm_loc.size(0), -1, 4),
+                      arm_conf.view(arm_conf.size(0), -1, self.num_classes),
+                      self.priors if self.input_fixed else self.prior_layer(
+                          img_wh, feature_maps_wh))
         return output
-
-
-
-
-

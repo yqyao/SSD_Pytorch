@@ -15,42 +15,63 @@ from utils.nms_wrapper import nms, soft_nms
 from configs.config import cfg, cfg_from_file
 import numpy as np
 import time
-import os 
+import os
 import sys
 import pickle
 import datetime
 from models.model_builder import SSD
 import yaml
 
+
 def arg_parse():
-    parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
-    parser.add_argument('--weights', default='weights/ssd_darknet_300.pth',
-                        type=str, help='Trained state_dict file path to open')
+    parser = argparse.ArgumentParser(
+        description='Single Shot MultiBox Detection')
     parser.add_argument(
-        '--cfg', dest='cfg_file', required=True,
+        '--weights',
+        default='weights/ssd_darknet_300.pth',
+        type=str,
+        help='Trained state_dict file path to open')
+    parser.add_argument(
+        '--cfg',
+        dest='cfg_file',
+        required=True,
         help='Config file for training (and optionally testing)')
-    parser.add_argument('--save_folder', default='eval/', type=str,
-                        help='File path to save results')
-    parser.add_argument('--num_workers', default=8,
-                        type=int, help='Number of workers used in dataloading')
-    parser.add_argument('--retest', default=False, type=bool,
-                        help='test cache results')
+    parser.add_argument(
+        '--save_folder',
+        default='eval/',
+        type=str,
+        help='File path to save results')
+    parser.add_argument(
+        '--num_workers',
+        default=8,
+        type=int,
+        help='Number of workers used in dataloading')
+    parser.add_argument(
+        '--retest', default=False, type=bool, help='test cache results')
     args = parser.parse_args()
     return args
 
-def eval_net(val_dataset, val_loader, net, detector, cfg, transform, max_per_image=300, thresh=0.01, batch_size=1):
+
+def eval_net(val_dataset,
+             val_loader,
+             net,
+             detector,
+             cfg,
+             transform,
+             max_per_image=300,
+             thresh=0.01,
+             batch_size=1):
     net.eval()
     num_images = len(val_dataset)
     num_classes = cfg.MODEL.NUM_CLASSES
     eval_save_folder = "./eval/"
     if not os.path.exists(eval_save_folder):
         os.mkdir(eval_save_folder)
-    all_boxes = [[[] for _ in range(num_images)]
-                 for _ in range(num_classes)]
+    all_boxes = [[[] for _ in range(num_images)] for _ in range(num_classes)]
     det_file = os.path.join(eval_save_folder, 'detections.pkl')
 
     if args.retest:
-        f = open(det_file,'rb')
+        f = open(det_file, 'rb')
         all_boxes = pickle.load(f)
         print('Evaluating detections')
         val_dataset.evaluate_detections(all_boxes, eval_save_folder)
@@ -81,8 +102,9 @@ def eval_net(val_dataset, val_loader, net, detector, cfg, transform, max_per_ima
                         continue
                     c_bboxes = boxes_[inds]
                     c_scores = scores_[inds, j]
-                    c_dets = np.hstack((c_bboxes, c_scores[:, np.newaxis])).astype(
-                        np.float32, copy=False)
+                    c_dets = np.hstack((c_bboxes,
+                                        c_scores[:, np.newaxis])).astype(
+                                            np.float32, copy=False)
                     keep = nms(c_dets, cfg.TEST.NMS_OVERLAP, force_cpu=True)
                     keep = keep[:50]
                     c_dets = c_dets[keep, :]
@@ -92,8 +114,8 @@ def eval_net(val_dataset, val_loader, net, detector, cfg, transform, max_per_ima
             nms_time = t3 - t2
             forward_time = t4 - t1
             if idx % 10 == 0:
-                print('im_detect: {:d}/{:d} {:.3f}s {:.3f}s {:.3f}s'
-                    .format(i + 1, num_images, forward_time, detect_time, nms_time))
+                print('im_detect: {:d}/{:d} {:.3f}s {:.3f}s {:.3f}s'.format(
+                    i + 1, num_images, forward_time, detect_time, nms_time))
 
     with open(det_file, 'wb') as f:
         pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
@@ -101,10 +123,11 @@ def eval_net(val_dataset, val_loader, net, detector, cfg, transform, max_per_ima
     val_dataset.evaluate_detections(all_boxes, eval_save_folder)
     print("detect time: ", time.time() - st)
 
+
 def main():
     global args
     args = arg_parse()
-    cfg_from_file(args.cfg_file)  
+    cfg_from_file(args.cfg_file)
     bgr_means = cfg.TRAIN.BGR_MEAN
     dataset_name = cfg.DATASETS.DATA_TYPE
     batch_size = cfg.TEST.BATCH_SIZE
@@ -136,7 +159,7 @@ def main():
     for k, v in state_dict.items():
         head = k[:7]
         if head == 'module.':
-            name = k[7:] # remove `module.`
+            name = k[7:]  # remove `module.`
         else:
             name = k
         new_state_dict[name] = v
@@ -144,17 +167,27 @@ def main():
     detector = Detect(cfg)
     ValTransform = BaseTransform(size_cfg.IMG_WH, bgr_means, (2, 0, 1))
     val_dataset = trainvalDataset(dataroot, valSet, ValTransform, "val")
-    val_loader = data.DataLoader(val_dataset,
-                                 batch_size,
-                                 shuffle=False,
-                                 num_workers=num_workers,
-                                 collate_fn=detection_collate)
+    val_loader = data.DataLoader(
+        val_dataset,
+        batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        collate_fn=detection_collate)
     top_k = 300
     thresh = cfg.TEST.CONFIDENCE_THRESH
-    eval_net(val_dataset, val_loader, net, detector, cfg, ValTransform, top_k, thresh=thresh, batch_size=batch_size)
+    eval_net(
+        val_dataset,
+        val_loader,
+        net,
+        detector,
+        cfg,
+        ValTransform,
+        top_k,
+        thresh=thresh,
+        batch_size=batch_size)
+
 
 if __name__ == '__main__':
     st = time.time()
     main()
     print("final time", time.time() - st)
-

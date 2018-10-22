@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import torch.nn.init as init
-from utils.box_utils import weights_init
+from models.model_helper import FpnAdapter, WeaveAdapter, weights_init
 
 
 class L2Norm(nn.Module):
@@ -22,11 +22,12 @@ class L2Norm(nn.Module):
         init.constant_(self.weight, self.gamma)
 
     def forward(self, x):
-        norm = x.pow(2).sum(dim=1, keepdim=True).sqrt()+self.eps
+        norm = x.pow(2).sum(dim=1, keepdim=True).sqrt() + self.eps
         x = x / norm
-        out = self.weight.unsqueeze(0).unsqueeze(
-            2).unsqueeze(3).expand_as(x) * x
+        out = self.weight.unsqueeze(0).unsqueeze(2).unsqueeze(3).expand_as(
+            x) * x
         return out
+
 
 # This function is derived from torchvision VGG make_layers()
 # https://github.com/pytorch/vision/blob/master/torchvision/models/vgg.py
@@ -50,15 +51,23 @@ def vgg(cfg, i, batch_norm=False):
     pool5 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
     conv6 = nn.Conv2d(512, 1024, kernel_size=3, padding=6, dilation=6)
     conv7 = nn.Conv2d(1024, 1024, kernel_size=1)
-    layers += [pool5, conv6,
-               nn.ReLU(inplace=True), conv7, nn.ReLU(inplace=True)]
+    layers += [
+        pool5, conv6,
+        nn.ReLU(inplace=True), conv7,
+        nn.ReLU(inplace=True)
+    ]
     return layers
 
+
 base = {
-    '300': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'C', 512, 512, 512, 'M',
-            512, 512, 512],
-    '512': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'C', 512, 512, 512, 'M',
-            512, 512, 512],
+    '300': [
+        64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'C', 512, 512, 512, 'M',
+        512, 512, 512
+    ],
+    '512': [
+        64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'C', 512, 512, 512, 'M',
+        512, 512, 512
+    ],
 }
 
 
@@ -71,38 +80,38 @@ def add_extras(size):
 
     return layers
 
-def last_layer_trans():
-    return nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
-                  nn.ReLU(inplace=True),
-                  nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
-                  nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1))
 
+# def last_layer_trans():
+#     return nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+#                   nn.ReLU(inplace=True),
+#                   nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+#                   nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1))
 
-def trans_layers(size):
-    layers = list()
-    layers += [nn.Sequential(nn.Conv2d(512, 256, kernel_size=3, stride=1,           padding=1),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1))]
-    layers += [nn.Sequential(nn.Conv2d(1024, 256, kernel_size=3, stride=1,           padding=1),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1))]
-    layers += [nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1,           padding=1),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1))]
+# def trans_layers(size):
+#     layers = list()
+#     layers += [nn.Sequential(nn.Conv2d(512, 256, kernel_size=3, stride=1,           padding=1),
+#                 nn.ReLU(inplace=True),
+#                 nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1))]
+#     layers += [nn.Sequential(nn.Conv2d(1024, 256, kernel_size=3, stride=1,           padding=1),
+#                 nn.ReLU(inplace=True),
+#                 nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1))]
+#     layers += [nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1,           padding=1),
+#                 nn.ReLU(inplace=True),
+#                 nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1))]
 
-    return layers
+#     return layers
 
-def latent_layers(size):
-    layers = []
-    for i in range(3):
-        layers += [nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)]
-    return layers
+# def latent_layers(size):
+#     layers = []
+#     for i in range(3):
+#         layers += [nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)]
+#     return layers
 
-def up_layers(size):
-    layers = []
-    for i in range(3):
-        layers += [nn.ConvTranspose2d(256, 256, kernel_size=2, stride=2, padding=0)]
-    return layers
+# def up_layers(size):
+#     layers = []
+#     for i in range(3):
+#         layers += [nn.ConvTranspose2d(256, 256, kernel_size=2, stride=2, padding=0)]
+#     return layers
 
 
 class VGG16Extractor(nn.Module):
@@ -112,18 +121,19 @@ class VGG16Extractor(nn.Module):
         self.extras = nn.ModuleList(add_extras(str(size)))
         self.L2Norm_4_3 = L2Norm(512, 10)
         self.L2Norm_5_3 = L2Norm(1024, 8)
-        self.last_layer_trans = last_layer_trans()
-        self.trans_layers = nn.ModuleList(trans_layers(str(size)))
-        self.latent_layers = nn.ModuleList(latent_layers((str(size))))
-        self.up_layers = nn.ModuleList(up_layers(str(size)))
+        # self.last_layer_trans = last_layer_trans()
+        # self.trans_layers = nn.ModuleList(trans_layers(str(size)))
+        # self.latent_layers = nn.ModuleList(latent_layers((str(size))))
+        # self.up_layers = nn.ModuleList(up_layers(str(size)))
+        self.fpn = FpnAdapter([512, 1024, 256, 256], 4)
         self._init_modules()
 
     def _init_modules(self):
         self.extras.apply(weights_init)
-        self.last_layer_trans.apply(weights_init)
-        self.trans_layers.apply(weights_init)
-        self.latent_layers.apply(weights_init)
-        self.up_layers.apply(weights_init)
+        # self.last_layer_trans.apply(weights_init)
+        # self.trans_layers.apply(weights_init)
+        # self.latent_layers.apply(weights_init)
+        # self.up_layers.apply(weights_init)
 
     def forward(self, x):
         """Applies network layers and ops on input image(s) x.
@@ -142,7 +152,6 @@ class VGG16Extractor(nn.Module):
                     3: priorbox layers, Shape: [2,num_priors*4]
         """
         arm_sources = list()
-        odm_sources = list()
 
         for i in range(23):
             x = self.vgg[i](x)
@@ -174,23 +183,25 @@ class VGG16Extractor(nn.Module):
             x = F.relu(self.extras[4](x), inplace=True)
             x = F.relu(self.extras[5](x), inplace=True)
             c6 = x
-            arm_sources.append(c6) 
+            arm_sources.append(c6)
 
-        x = self.last_layer_trans(x)
-        odm_sources.append(x)
+        # x = self.last_layer_trans(x)
+        # odm_sources.append(x)
 
-        trans_layer_list = list()
+        # trans_layer_list = list()
 
-        for(p, t) in zip(arm_sources, self.trans_layers):
-            trans_layer_list.append(t(p))
-      
-        trans_layer_list.reverse()
-        for (t, u, l) in zip(trans_layer_list, self.up_layers, self.latent_layers):
-            x = F.relu(l(F.relu(u(x)+ t, inplace=True)), inplace=True)
-            odm_sources.append(x)
+        # for(p, t) in zip(arm_sources, self.trans_layers):
+        #     trans_layer_list.append(t(p))
 
-        odm_sources.reverse()
+        # trans_layer_list.reverse()
+        # for (t, u, l) in zip(trans_layer_list, self.up_layers, self.latent_layers):
+        #     x = F.relu(l(F.relu(u(x)+ t, inplace=True)), inplace=True)
+        #     odm_sources.append(x)
+
+        # odm_sources.reverse()
+        odm_sources = self.fpn(arm_sources)
         return arm_sources, odm_sources
+
 
 def refine_vgg(size, channel_size='48'):
     return VGG16Extractor(size)

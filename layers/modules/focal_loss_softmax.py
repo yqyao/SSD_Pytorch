@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 # Written by yq_yao
 
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
+
 
 class FocalLossSoftmax(nn.Module):
     '''
@@ -25,7 +25,6 @@ class FocalLossSoftmax(nn.Module):
         self.class_num = class_num
         self.size_average = size_average
 
-
     def forward(self, inputs, targets):
         N = inputs.size(0)
         C = inputs.size(1)
@@ -39,12 +38,12 @@ class FocalLossSoftmax(nn.Module):
         if inputs.is_cuda and not self.alpha.is_cuda:
             self.alpha = self.alpha.cuda()
         alpha = self.alpha[ids.data.view(-1)]
-        probs = (P*class_mask).sum(1).view(-1,1)
+        probs = (P * class_mask).sum(1).view(-1, 1)
         log_p = probs.log()
-        batch_loss = -alpha*(torch.pow((1-probs), self.gamma))*log_p 
+        batch_loss = -alpha * (torch.pow((1 - probs), self.gamma)) * log_p
 
         if self.size_average:
             loss = batch_loss.mean()
         else:
             loss = batch_loss.sum()
-        return loss        
+        return loss

@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 # Written by yq_yao
-# 
+#
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from utils.box_utils import weights_init
+from model_helper import weights_init
 
 
 def add_extras(size, in_channel, batch_norm=False):
@@ -26,14 +26,23 @@ def add_extras(size, in_channel, batch_norm=False):
 
     return layers
 
+
 class ConvBN(nn.Module):
     def __init__(self, ch_in, ch_out, kernel_size=3, stride=1, padding=0):
         super().__init__()
-        self.conv = nn.Conv2d(ch_in, ch_out, kernel_size=kernel_size, stride=stride, padding=padding, bias=False)
+        self.conv = nn.Conv2d(
+            ch_in,
+            ch_out,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            bias=False)
         self.bn = nn.BatchNorm2d(ch_out, momentum=0.01, eps=1e-05, affine=True)
 
     def forward(self, x):
-        return F.leaky_relu(self.bn(self.conv(x)), negative_slope=0.1, inplace=True)
+        return F.leaky_relu(
+            self.bn(self.conv(x)), negative_slope=0.1, inplace=True)
+
 
 class DarknetBlock(nn.Module):
     def __init__(self, ch_in):
@@ -47,6 +56,7 @@ class DarknetBlock(nn.Module):
         out = self.conv2(out)
         return out + x
 
+
 class Darknet19(nn.Module):
     def __init__(self, size):
         super().__init__()
@@ -59,41 +69,51 @@ class Darknet19(nn.Module):
         self.extras = nn.ModuleList(add_extras(str(size), 1024))
 
     def _make_layer1(self):
-        layers = [nn.MaxPool2d(kernel_size=2, stride=2),
-                    ConvBN(32, 64, kernel_size=3, stride=1, padding=1)]
+        layers = [
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            ConvBN(32, 64, kernel_size=3, stride=1, padding=1)
+        ]
         return nn.Sequential(*layers)
-        
+
     def _make_layer2(self):
-        layers = [nn.MaxPool2d(kernel_size=2, stride=2),
-                  ConvBN(64, 128, kernel_size=3, stride=1, padding=1),
-                  ConvBN(128, 64, kernel_size=1, stride=1),
-                  ConvBN(64, 128, kernel_size=3, stride=1, padding=1)]
+        layers = [
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            ConvBN(64, 128, kernel_size=3, stride=1, padding=1),
+            ConvBN(128, 64, kernel_size=1, stride=1),
+            ConvBN(64, 128, kernel_size=3, stride=1, padding=1)
+        ]
         return nn.Sequential(*layers)
 
     def _make_layer3(self):
-        layers = [nn.MaxPool2d(kernel_size=2, stride=2, ceil_mode=True),
-                  ConvBN(128, 256, kernel_size=3, stride=1, padding=1),
-                  ConvBN(256, 128, kernel_size=1, stride=1),
-                  ConvBN(128, 256, kernel_size=3, stride=1, padding=1)]
+        layers = [
+            nn.MaxPool2d(kernel_size=2, stride=2, ceil_mode=True),
+            ConvBN(128, 256, kernel_size=3, stride=1, padding=1),
+            ConvBN(256, 128, kernel_size=1, stride=1),
+            ConvBN(128, 256, kernel_size=3, stride=1, padding=1)
+        ]
         return nn.Sequential(*layers)
 
     def _make_layer4(self):
-        layers = [nn.MaxPool2d(kernel_size=2, stride=2, ceil_mode=True),
-                  ConvBN(256, 512, kernel_size=3, stride=1, padding=1),
-                  ConvBN(512, 256, kernel_size=1, stride=1),
-                  ConvBN(256, 512, kernel_size=3, stride=1, padding=1),
-                  ConvBN(512, 256, kernel_size=1, stride=1),
-                  ConvBN(256, 512, kernel_size=3, stride=1, padding=1)]
-        return nn.Sequential(*layers)        
+        layers = [
+            nn.MaxPool2d(kernel_size=2, stride=2, ceil_mode=True),
+            ConvBN(256, 512, kernel_size=3, stride=1, padding=1),
+            ConvBN(512, 256, kernel_size=1, stride=1),
+            ConvBN(256, 512, kernel_size=3, stride=1, padding=1),
+            ConvBN(512, 256, kernel_size=1, stride=1),
+            ConvBN(256, 512, kernel_size=3, stride=1, padding=1)
+        ]
+        return nn.Sequential(*layers)
 
     def _make_layer5(self):
-        layers = [nn.MaxPool2d(kernel_size=2, stride=2, ceil_mode=True),
-                  ConvBN(512, 1024, kernel_size=3, stride=1, padding=1),
-                  ConvBN(1024, 512, kernel_size=1, stride=1),
-                  ConvBN(512, 1024, kernel_size=3, stride=1, padding=1),
-                  ConvBN(1024, 512, kernel_size=1, stride=1),
-                  ConvBN(512, 1024, kernel_size=3, stride=1, padding=1)]
-        return nn.Sequential(*layers) 
+        layers = [
+            nn.MaxPool2d(kernel_size=2, stride=2, ceil_mode=True),
+            ConvBN(512, 1024, kernel_size=3, stride=1, padding=1),
+            ConvBN(1024, 512, kernel_size=1, stride=1),
+            ConvBN(512, 1024, kernel_size=3, stride=1, padding=1),
+            ConvBN(1024, 512, kernel_size=1, stride=1),
+            ConvBN(512, 1024, kernel_size=3, stride=1, padding=1)
+        ]
+        return nn.Sequential(*layers)
 
     def forward(self, x):
         out = self.conv(x)
@@ -110,6 +130,7 @@ class Darknet19(nn.Module):
                 sources.append(x)
         return sources
 
+
 class Darknet53(nn.Module):
     def __init__(self, num_blocks, size):
         super().__init__()
@@ -123,10 +144,10 @@ class Darknet53(nn.Module):
         self._init_modules()
 
     def _make_layer(self, ch_in, num_blocks, stride=1):
-        layers = [ConvBN(ch_in, ch_in*2, stride=stride, padding=1)]
+        layers = [ConvBN(ch_in, ch_in * 2, stride=stride, padding=1)]
         for i in range(num_blocks):
             layers.append(DarknetBlock(ch_in * 2))
-        return nn.Sequential(*layers) 
+        return nn.Sequential(*layers)
 
     def _init_modules(self):
         self.extras.apply(weights_init)
@@ -146,11 +167,14 @@ class Darknet53(nn.Module):
                 sources.append(x)
         return sources
 
+
 def SSDarknet53(size, channel_size='48'):
-    return Darknet53([1,2,8,8,4], size) 
+    return Darknet53([1, 2, 8, 8, 4], size)
+
 
 def SSDarknet19(size, channel_size='48'):
-    return Darknet19(size)  
+    return Darknet19(size)
+
 
 if __name__ == "__main__":
     import os
@@ -165,5 +189,4 @@ if __name__ == "__main__":
         st = time.time()
         for i in range(100):
             model3(x.cuda())
-        print(time.time() - st)     
-
+        print(time.time() - st)

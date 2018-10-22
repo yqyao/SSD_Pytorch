@@ -7,7 +7,8 @@ import torch.nn.functional as F
 import models.dense_conv
 from torch.autograd import Variable
 import torch.nn.init as init
-from utils.box_utils import weights_init
+from model_helper import weights_init
+
 
 class L2Norm(nn.Module):
     def __init__(self, n_channels, scale):
@@ -22,11 +23,12 @@ class L2Norm(nn.Module):
         init.constant_(self.weight, self.gamma)
 
     def forward(self, x):
-        norm = x.pow(2).sum(dim=1, keepdim=True).sqrt()+self.eps
+        norm = x.pow(2).sum(dim=1, keepdim=True).sqrt() + self.eps
         x = x / norm
-        out = self.weight.unsqueeze(0).unsqueeze(
-            2).unsqueeze(3).expand_as(x) * x
+        out = self.weight.unsqueeze(0).unsqueeze(2).unsqueeze(3).expand_as(
+            x) * x
         return out
+
 
 # This function is derived from torchvision VGG make_layers()
 # https://github.com/pytorch/vision/blob/master/torchvision/models/vgg.py
@@ -50,21 +52,31 @@ def vgg(cfg, i, batch_norm=False):
     pool5 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
     conv6 = nn.Conv2d(512, 1024, kernel_size=3, padding=6, dilation=6)
     conv7 = nn.Conv2d(1024, 1024, kernel_size=1)
-    layers += [pool5, conv6,
-               nn.ReLU(inplace=True), conv7, nn.ReLU(inplace=True)]
+    layers += [
+        pool5, conv6,
+        nn.ReLU(inplace=True), conv7,
+        nn.ReLU(inplace=True)
+    ]
     return layers
 
 
 extras_cfg = {
     '300': [256, 'S', 512, 128, 'S', 256, 128, 256, 128, 256],
-    '512': [256, 'S', 512, 128, 'S', 256, 128, 'S', 256, 128, 'S', 256, 128, 'S', 256],
+    '512': [
+        256, 'S', 512, 128, 'S', 256, 128, 'S', 256, 128, 'S', 256, 128, 'S',
+        256
+    ],
 }
 
 base = {
-    '300': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'C', 512, 512, 512, 'M',
-            512, 512, 512],
-    '512': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'C', 512, 512, 512, 'M',
-            512, 512, 512],
+    '300': [
+        64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'C', 512, 512, 512, 'M',
+        512, 512, 512
+    ],
+    '512': [
+        64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'C', 512, 512, 512, 'M',
+        512, 512, 512
+    ],
 }
 
 
@@ -76,8 +88,14 @@ def add_extras(cfg, i, batch_norm=False):
     for k, v in enumerate(cfg):
         if in_channels != 'S':
             if v == 'S':
-                layers += [nn.Conv2d(in_channels, cfg[k + 1],
-                                     kernel_size=(1, 3)[flag], stride=2, padding=1)]
+                layers += [
+                    nn.Conv2d(
+                        in_channels,
+                        cfg[k + 1],
+                        kernel_size=(1, 3)[flag],
+                        stride=2,
+                        padding=1)
+                ]
             else:
                 layers += [nn.Conv2d(in_channels, v, kernel_size=(1, 3)[flag])]
             flag = not flag
@@ -111,7 +129,7 @@ class VGG16Extractor(nn.Module):
         self.dense_list2.apply(weights_init)
         self.dense_list3.apply(weights_init)
         self.dense_list4.apply(weights_init)
-        self.dense_list5.apply(weights_init)   
+        self.dense_list5.apply(weights_init)
 
     def forward(self, x):
         """Applies network layers and ops on input image(s) x.
@@ -202,29 +220,35 @@ class VGG16Extractor(nn.Module):
         dense5_up2 = self.dense_list4[4](dense5_up2_conv)
         dense5_up3 = self.dense_list4[5](dense5_up3_conv)
 
-        dense_out1 = torch.cat((dense1_p1_conv, dense2, dense3_up, dense4_up2, dense5_up3), 1)
+        dense_out1 = torch.cat(
+            (dense1_p1_conv, dense2, dense3_up, dense4_up2, dense5_up3), 1)
         dense_out1 = F.relu(self.dense_list5[0](dense_out1))
         sources.append(dense_out1)
 
-        dense_out2 = torch.cat((dense1_p2_conv, dense2_p1_conv, dense3, dense4_up1, dense5_up2), 1)
+        dense_out2 = torch.cat(
+            (dense1_p2_conv, dense2_p1_conv, dense3, dense4_up1, dense5_up2),
+            1)
         dense_out2 = F.relu(self.dense_list5[1](dense_out2))
         sources.append(dense_out2)
 
-        dense_out3 = torch.cat((dense1_p3_conv, dense2_p2_conv, dense3_p1_conv, dense4, dense5_up1), 1)
+        dense_out3 = torch.cat((dense1_p3_conv, dense2_p2_conv, dense3_p1_conv,
+                                dense4, dense5_up1), 1)
         dense_out3 = F.relu(self.dense_list5[2](dense_out3))
         sources.append(dense_out3)
 
-        dense_out4 = torch.cat((dense2_p3_conv, dense3_p2_conv, dense4_p_conv, dense5), 1)
+        dense_out4 = torch.cat(
+            (dense2_p3_conv, dense3_p2_conv, dense4_p_conv, dense5), 1)
         dense_out4 = F.relu(self.dense_list5[3](dense_out4))
         sources.append(dense_out4)
 
         # apply extra layers and cache source layer outputs
         for k, v in enumerate(self.extras):
             if k > 3:
-                x= F.relu(v(x), inplace=True)
+                x = F.relu(v(x), inplace=True)
                 if k % 2 == 1:
                     sources.append(x)
         return sources
+
 
 def DRFVgg(size, channel_size='48'):
     return VGG16Extractor(size, channel_size)

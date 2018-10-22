@@ -3,10 +3,15 @@ import os
 import argparse
 import os.path as osp
 
+
 def check_size(submit_file):
-    max_size = 60*1024*1024
+    max_size = 60 * 1024 * 1024
     if osp.getsize(submit_file) > max_size:
-        raise (IOError,"File size exceeds the specified maximum size, which is 60M for the server.")
+        raise (
+            IOError,
+            "File size exceeds the specified maximum size, which is 60M for the server."
+        )
+
 
 def parse_submission(submit_file):
     with open(submit_file, 'r') as f:
@@ -19,7 +24,8 @@ def parse_submission(submit_file):
         if cls not in submit_dict:
             submit_dict[cls] = list()
             final_dict[cls] = dict()
-        submit_dict[cls].append([val[0], val[2], val[3], val[4], val[5], val[6]])
+        submit_dict[cls].append(
+            [val[0], val[2], val[3], val[4], val[5], val[6]])
     for k, v in submit_dict.items():
         image_ids = [x[0] for x in v]
         confidence = np.array([float(x[1]) for x in v])
@@ -32,6 +38,7 @@ def parse_submission(submit_file):
         final_dict[k]["BB"] = np.array(BB)
     return final_dict
 
+
 def parse_gt_annotation(gt_file):
     with open(gt_file, 'r') as f:
         lines = f.readlines()
@@ -41,11 +48,17 @@ def parse_gt_annotation(gt_file):
         img_id = item[0]
         obj_struct = {}
         obj_struct['class'] = item[1]
-        obj_struct['bbox'] = [int(item[2]), int(item[3]), int(item[4]), int(item[5])]
+        obj_struct['bbox'] = [
+            int(item[2]),
+            int(item[3]),
+            int(item[4]),
+            int(item[5])
+        ]
         if img_id not in gt:
             gt[img_id] = list()
         gt[img_id].append(obj_struct)
     return gt
+
 
 def get_class_recs(recs, classname):
     npos = 0
@@ -58,6 +71,7 @@ def get_class_recs(recs, classname):
         class_recs[key] = {'bbox': bbox, 'det': det}
     return class_recs, npos
 
+
 def compute_ap(rec, prec):
     mrec = np.concatenate(([0.], rec, [1.]))
     mpre = np.concatenate(([0.], prec, [0.]))
@@ -66,6 +80,7 @@ def compute_ap(rec, prec):
     i = np.where(mrec[1:] != mrec[:-1])[0]
     ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
     return ap
+
 
 def eval(submit_file, gt_file, ovthresh, classname):
     recs = parse_gt_annotation(gt_file)
@@ -79,7 +94,9 @@ def eval(submit_file, gt_file, ovthresh, classname):
     fp = np.zeros(nd)
     for d in range(nd):
         if image_ids[d] not in recs.keys():
-            raise KeyError("Can not find image {} in the groundtruth file, did you submit the result file for the right dataset?".format(image_ids[d]))
+            raise KeyError(
+                "Can not find image {} in the groundtruth file, did you submit the result file for the right dataset?"
+                .format(image_ids[d]))
     for d in range(nd):
         R = class_recs[image_ids[d]]
         bb = BB[d, :].astype(float)
@@ -114,6 +131,7 @@ def eval(submit_file, gt_file, ovthresh, classname):
     ap = compute_ap(rec, prec)
     return ap
 
+
 def result_eval(submit_file, gt, class_list):
     ove_aap = []
     for ove in np.arange(0.5, 1.0, 0.05):
@@ -126,6 +144,7 @@ def result_eval(submit_file, gt, class_list):
         ove_aap.append(cls_mAP)
     mAP = np.average(ove_aap) * 100
     return round(mAP, 3)
+
 
 if __name__ == '__main__':
     '''

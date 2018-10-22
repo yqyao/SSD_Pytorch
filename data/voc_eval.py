@@ -13,6 +13,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+
 def parse_rec(filename):
     """ Parse a PASCAL VOC xml file """
     tree = ET.parse(filename)
@@ -24,14 +25,15 @@ def parse_rec(filename):
         obj_struct['truncated'] = int(obj.find('truncated').text)
         obj_struct['difficult'] = int(obj.find('difficult').text)
         bbox = obj.find('bndbox')
-        obj_struct['bbox'] = [int(bbox.find('xmin').text),
-                              int(bbox.find('ymin').text),
-                              int(bbox.find('xmax').text),
-                              int(bbox.find('ymax').text)]
+        obj_struct['bbox'] = [
+            int(bbox.find('xmin').text),
+            int(bbox.find('ymin').text),
+            int(bbox.find('xmax').text),
+            int(bbox.find('ymax').text)
+        ]
         objects.append(obj_struct)
 
     return objects
-
 
 
 def voc_ap(rec, prec, use_07_metric=False):
@@ -66,6 +68,7 @@ def voc_ap(rec, prec, use_07_metric=False):
         # and sum (\Delta recall) * prec
         ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
     return ap
+
 
 def voc_eval(detpath,
              annopath,
@@ -134,9 +137,11 @@ def voc_eval(detpath,
         difficult = np.array([x['difficult'] for x in R]).astype(np.bool)
         det = [False] * len(R)
         npos = npos + sum(~difficult)
-        class_recs[imagename] = {'bbox': bbox,
-                                 'difficult': difficult,
-                                 'det': det}
+        class_recs[imagename] = {
+            'bbox': bbox,
+            'difficult': difficult,
+            'det': det
+        }
 
     # read dets
     detfile = detpath.format(classname)
@@ -147,13 +152,13 @@ def voc_eval(detpath,
     image_ids = [x[0] for x in splitlines]
     confidence = np.array([float(x[1]) for x in splitlines])
     BB = np.array([[float(z) for z in x[2:]] for x in splitlines])
-        # sort by confidence
+    # sort by confidence
     sorted_ind = np.argsort(-confidence)
     sorted_scores = np.sort(-confidence)
     BB = BB[sorted_ind, :]
     image_ids = [image_ids[x] for x in sorted_ind]
 
-        # go down dets and mark TPs and FPs
+    # go down dets and mark TPs and FPs
     nd = len(image_ids)
     tp = np.zeros(nd)
     fp = np.zeros(nd)
@@ -174,7 +179,7 @@ def voc_eval(detpath,
             ih = np.maximum(iymax - iymin + 1., 0.)
             inters = iw * ih
 
-                # union
+            # union
             uni = ((bb[2] - bb[0] + 1.) * (bb[3] - bb[1] + 1.) +
                    (BBGT[:, 2] - BBGT[:, 0] + 1.) *
                    (BBGT[:, 3] - BBGT[:, 1] + 1.) - inters)
@@ -197,8 +202,8 @@ def voc_eval(detpath,
     fp = np.cumsum(fp)
     tp = np.cumsum(tp)
     rec = tp / float(npos)
-        # avoid divide by zero in case the first detection matches a difficult
-        # ground truth
+    # avoid divide by zero in case the first detection matches a difficult
+    # ground truth
     prec = tp / np.maximum(tp + fp, np.finfo(np.float64).eps)
     # if classname == 'person':
     final_rec = round(rec[-1], 4)
@@ -207,7 +212,9 @@ def voc_eval(detpath,
     if not os.path.exists(plt_save_path):
         os.makedirs(plt_save_path)
     plt.plot(rec, prec, 'r')
-    pr_curl = os.path.join(plt_save_path, '{}_{}_{}pr.jpg'.format(classname, str(final_prec), str(final_rec)))
+    pr_curl = os.path.join(
+        plt_save_path, '{}_{}_{}pr.jpg'.format(classname, str(final_prec),
+                                               str(final_rec)))
     plt.savefig(pr_curl)
     plt.close()
     ap = voc_ap(rec, prec, use_07_metric)
