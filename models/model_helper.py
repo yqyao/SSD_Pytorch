@@ -42,6 +42,29 @@ def trans_layers(block, fpn_num):
     return layers
 
 
+def trans_layers_2(raw_channels, inner_channels):
+    layers = list()
+    fpn_num = len(raw_channels)
+    for i in range(fpn_num):
+        layers += [
+            nn.Sequential(
+                nn.Conv2d(
+                    raw_channels[i],
+                    inner_channels[i],
+                    kernel_size=3,
+                    stride=1,
+                    padding=1), nn.ReLU(inplace=True),
+                nn.Conv2d(
+                    inner_channels[i],
+                    inner_channels[i],
+                    kernel_size=3,
+                    stride=1,
+                    padding=1))
+        ]
+
+    return layers
+
+
 def latent_layers(fpn_num):
     layers = []
     for i in range(fpn_num):
@@ -160,6 +183,62 @@ def weave_layers(block, weave_num):
     return layers
 
 
+class WeaveBlock(nn.Module):
+    def __init__(self, raw_channel, weave_add_channel, dense_num):
+        super(WeaveBlock, self).__init__()
+        layers = list()
+        for j in range(dense_num):
+            layers += [
+                nn.Conv2d(
+                    raw_channel, weave_add_channel[j], kernel_size=1, stride=1)
+            ]
+        self.weave_layers = nn.ModuleList(layers)
+        self._init_modules()
+
+    def _init_modules(self):
+        self.weave_layers.apply(weights_init)
+
+    def forward(self, x):
+        out = list()
+        out.append(x)
+        for i in range(len(self.weave_layers)):
+            out.append(self.weave_layers[i](x))
+        return out
+
+
+def weave_layers_2(raw_channels, weave_add_channels):
+    layers = list()
+    num = 2
+    weave_num = len(raw_channels)
+    for i in range(weave_num):
+        if i == 0 or i == weave_num - 1:
+            layers += [WeaveBlock(raw_channels[i], weave_add_channels[i], num-1)]
+        else:
+            layers += [WeaveBlock(raw_channels[i], weave_add_channels[i], num)]
+    return layers
+
+
+def weave_concat_layers_2(raw_channels, weave_add_channels, weave_channels):
+    layers = list()
+    weave_num = len(raw_channels)
+    for i in range(weave_num):
+        if i == 0:
+            add_channel = weave_add_channels[i + 1][0]
+        elif i == weave_num - 1:
+            add_channel = weave_add_channels[i - 1][1]
+        else:
+            add_channel = weave_add_channels[i - 1][1] + weave_add_channels[
+                i + 1][0]
+        layers += [
+            nn.Conv2d(
+                raw_channels[i] + add_channel,
+                weave_channels[i],
+                kernel_size=1,
+                stride=1)
+        ]
+    return layers
+
+
 def weave_concat_layers(block, weave_num, channel):
     layers = list()
     for i in range(weave_num):
@@ -171,6 +250,57 @@ def weave_concat_layers(block, weave_num, channel):
             nn.Conv2d(block[i] + add_channel, 256, kernel_size=1, stride=1)
         ]
     return layers
+
+
+def adaptive_upsample(x, size):
+    return F.upsample(x, size, mode='bilinear')
+
+
+def adaptive_pool(x, size):
+    return F.adaptive_max_pool2d(x, size)
+
+
+class WeaveAdapter2(nn.Module):
+    def __init__(self, raw_channels, weave_add_channels, weave_channels):
+        super(WeaveAdapter2, self).__init__()
+        self.trans_layers = nn.ModuleList(
+            trans_layers_2(raw_channels, weave_channels))
+        self.weave_layers = nn.ModuleList(
+            weave_layers_2(weave_channels, weave_add_channels))
+        self.weave_concat_layers = nn.ModuleList(
+            weave_concat_layers_2(weave_channels, weave_add_channels,
+                                  weave_channels))
+        self.weave_num = len(raw_channels)
+        self._init_modules()
+
+    def _init_modules(self):
+        self.trans_layers.apply(weights_init)
+        self.weave_concat_layers.apply(weights_init)
+
+    def forward(self, x):
+        trans_layers_list = list()
+        weave_out = list()
+        for (p, t) in zip(x, self.trans_layers):
+            trans_layers_list.append(t(p))
+        weave_list = list()
+        for (t, w) in zip(trans_layers_list, self.weave_layers):
+            weave_list.append(w(t))
+
+        for i in range(self.weave_num):
+            b, c, h, w = weave_list[i][0].size()
+            if i == 0:
+                up = adaptive_upsample(weave_list[i + 1][1], (h, w))
+                weave = torch.cat((up, weave_list[i][0]), 1)
+            elif i == self.weave_num - 1:
+                pool = adaptive_pool(weave_list[i - 1][-1], (h, w))
+                weave = torch.cat((pool, weave_list[i][0]), 1)
+            else:
+                up = adaptive_upsample(weave_list[i + 1][1], (h, w))
+                pool = adaptive_pool(weave_list[i - 1][-1], (h, w))
+                weave = torch.cat((up, pool, weave_list[i][0]), 1)
+            weave = F.relu(self.weave_concat_layers[i](weave), inplace=True)
+            weave_out.append(weave)
+        return weave_out
 
 
 class WeaveAdapter(nn.Module):
