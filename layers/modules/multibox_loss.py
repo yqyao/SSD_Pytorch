@@ -89,12 +89,6 @@ class MultiBoxLoss(nn.Module):
 
         pos = conf_t > 0
         num_pos = pos.sum(1, keepdim=True)
-        # Localization Loss (Smooth L1)
-        # Shape: [batch,num_priors,4]
-        pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_data)
-        loc_p = loc_data[pos_idx].view(-1, 4)
-        loc_t = loc_t[pos_idx].view(-1, 4)
-        loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
 
         if self.OHEM:
             # Compute max conf across batch for hard negative mining
@@ -108,8 +102,12 @@ class MultiBoxLoss(nn.Module):
             _, loss_idx = loss_hard.sort(1, descending=True)
             _, idx_rank = loss_idx.sort(1)
             num_pos = pos.long().sum(1, keepdim=True)
-            num_neg = torch.clamp(
+            if num_pos > 0:
+                num_neg = torch.clamp(
                 self.negpos_ratio * num_pos, max=pos.size(1) - 1)
+            else:
+                num_neg = torch.clamp(
+                self.negpos_ratio * 30, max=pos.size(1) - 1)
             neg = idx_rank < num_neg.expand_as(idx_rank)
 
             # Confidence Loss Including Positive and Negative Examples
@@ -122,8 +120,17 @@ class MultiBoxLoss(nn.Module):
                 conf_p, targets_weighted, size_average=False)
         else:
             loss_c = F.cross_entropy(conf_p, conf_t, size_average=False)
-
-        N = num_pos.data.sum()
+        # Localization Loss (Smooth L1)
+        # Shape: [batch,num_priors,4]
+        if num_pos > 0:
+            pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_data)
+            loc_p = loc_data[pos_idx].view(-1, 4)
+            loc_t = loc_t[pos_idx].view(-1, 4)
+            loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
+            N = num_pos.data.sum()
+        else:
+            loss_l = 0
+            N = 1.0
         loss_l /= float(N)
         loss_c /= float(N)
         return loss_l, loss_c
