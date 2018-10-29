@@ -95,7 +95,8 @@ class AnnotationTransform(object):
             # res += [bndbox]  # [xmin, ymin, xmax, ymax, label_ind]
             res = np.vstack((res, bndbox))
             # img_id = target.find('filename').text[:-4]
-
+        if len(res) == 0:
+            np.vstack((res, [0, 0, 0, 0, 0]))
         return res  # [[xmin, ymin, xmax, ymax, label_ind], ... ]
 
 
