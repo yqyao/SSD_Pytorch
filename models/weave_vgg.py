@@ -6,8 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import torch.nn.init as init
-from models.model_helper import FpnAdapter, WeaveAdapter, weights_init
-
+from models.model_helper import FpnAdapter, WeaveAdapter, weights_init, WeaveAdapter2
+# from model_helper import FpnAdapter, WeaveAdapter, weights_init, WeaveAdapter2
 
 class L2Norm(nn.Module):
     def __init__(self, n_channels, scale):
@@ -88,7 +88,11 @@ class VGG16Extractor(nn.Module):
         self.extras = nn.ModuleList(add_extras(str(size)))
         self.L2Norm_4_3 = L2Norm(512, 10)
         self.L2Norm_5_3 = L2Norm(1024, 8)
-        self.weave = WeaveAdapter([512, 1024, 256, 256], 4)
+        self.raw_channels = [512, 1024, 256, 256]
+        self.weave_add_channels = [(48, 48), (48, 48), (48, 48), (48, 48)]
+        self.weave_channels = [256, 256, 256, 256]
+        # self.weave = WeaveAdapter([512, 1024, 256, 256], 4)
+        self.weave = WeaveAdapter2(self.raw_channels, self.weave_add_channels, self.weave_channels)
         self._init_modules()
 
     def _init_modules(self):

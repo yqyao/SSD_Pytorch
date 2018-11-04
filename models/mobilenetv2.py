@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import init
-from model_helper import weights_init
+from models.model_helper import weights_init
 
 
 def add_extras(size, in_channel, batch_norm=False):

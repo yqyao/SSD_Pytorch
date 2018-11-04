@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import models.dense_conv
 from torch.autograd import Variable
 import torch.nn.init as init
-from model_helper import weights_init
+from models.model_helper import weights_init
 
 
 class L2Norm(nn.Module):

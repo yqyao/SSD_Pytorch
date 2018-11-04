@@ -173,13 +173,14 @@ class ConvPoolUpsample(nn.Module):
 
 def weave_layers(block, weave_num):
     layers = list()
+    add_channel = 32
     for i in range(weave_num):
         if i == 0:
-            layers += [ConvPool(block[i], 32)]
+            layers += [ConvPool(block[i], add_channel)]
         elif i == weave_num - 1:
-            layers += [ConvUpsample(block[i], 32)]
+            layers += [ConvUpsample(block[i], add_channel)]
         else:
-            layers += [ConvPoolUpsample(block[i], 32)]
+            layers += [ConvPoolUpsample(block[i], add_channel)]
     return layers
 
 
@@ -212,7 +213,9 @@ def weave_layers_2(raw_channels, weave_add_channels):
     weave_num = len(raw_channels)
     for i in range(weave_num):
         if i == 0 or i == weave_num - 1:
-            layers += [WeaveBlock(raw_channels[i], weave_add_channels[i], num-1)]
+            layers += [
+                WeaveBlock(raw_channels[i], weave_add_channels[i], num - 1)
+            ]
         else:
             layers += [WeaveBlock(raw_channels[i], weave_add_channels[i], num)]
     return layers
@@ -310,7 +313,7 @@ class WeaveAdapter(nn.Module):
         self.weave_layers = nn.ModuleList(
             weave_layers([256, 256, 256, 256], weave_num))
         self.weave_concat_layers = nn.ModuleList(
-            weave_concat_layers([256, 256, 256, 256], weave_num, 32))
+            weave_concat_layers([256, 256, 256, 256], weave_num, 48))
         self.weave_num = weave_num
         self._init_modules()
 
@@ -335,6 +338,6 @@ class WeaveAdapter(nn.Module):
             else:
                 weave = torch.cat((weave_list[i][0], weave_list[i - 1][1],
                                    weave_list[i + 1][-1]), 1)
-            weave = self.weave_concat_layers[i](weave)
+            weave = F.relu(self.weave_concat_layers[i](weave), inplace=True)
             weave_out.append(weave)
         return weave_out
