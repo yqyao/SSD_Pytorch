@@ -102,7 +102,7 @@ class MultiBoxLoss(nn.Module):
             _, loss_idx = loss_hard.sort(1, descending=True)
             _, idx_rank = loss_idx.sort(1)
             num_pos = pos.long().sum(1, keepdim=True)
-            if num_pos > 0:
+            if num_pos.data.sum() > 0:
                 num_neg = torch.clamp(
                 self.negpos_ratio * num_pos, max=pos.size(1) - 1)
             else:
@@ -122,7 +122,7 @@ class MultiBoxLoss(nn.Module):
             loss_c = F.cross_entropy(conf_p, conf_t, size_average=False)
         # Localization Loss (Smooth L1)
         # Shape: [batch,num_priors,4]
-        if num_pos > 0:
+        if num_pos.data.sum() > 0:
             pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_data)
             loc_p = loc_data[pos_idx].view(-1, 4)
             loc_t = loc_t[pos_idx].view(-1, 4)
