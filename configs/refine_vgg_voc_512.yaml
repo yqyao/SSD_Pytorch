@@ -1,8 +1,8 @@
 MODEL:
-  TYPE: weave_vgg
-  SIZE: '300'
+  TYPE: refine_vgg
+  SIZE: '512'
   REFINE: True
-  CONV_BODY: weave_vgg.weave_vgg
+  CONV_BODY: refine_vgg.refine_vgg
   NUM_CLASSES: 21
   LOAD_PRETRAINED_WEIGHTS: True
   PRETRAIN_WEIGHTS: './weights/pretrained_models/vgg16_reducedfc.pth'
@@ -49,7 +49,7 @@ BIG:
 
 SOLVER:
   WEIGHT_DECAY: 0.0005
-  BASE_LR: 0.004
+  BASE_LR: 0.002
   GAMMA: 0.1
   MOMENTUM: 0.9
   EPOCH_STEPS: [0, 150, 200]  
@@ -72,7 +72,7 @@ DATASETS:
     COCOROOT: 'data/datasets/coco2015'
   
 TEST:
-  INPUT_WH: [320, 320]
+  INPUT_WH: [512, 512]
   CONFIDENCE_THRESH: 0.01
   NMS_OVERLAP: 0.45
   BATCH_SIZE: 16
