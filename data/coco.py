@@ -201,8 +201,8 @@ class COCODetection(data.Dataset):
         img = cv2.imread(img_id, cv2.IMREAD_COLOR)
         height, width, _ = img.shape
 
-        if self.target_transform is not None:
-            target = self.target_transform(target)
+        # if self.target_transform is not None:
+        #     target = self.target_transform(target)
 
         if self.transform is not None:
             img, target = self.transform(img, target)
