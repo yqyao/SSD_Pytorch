@@ -200,14 +200,14 @@ class COCODetection(data.Dataset):
         target = self.annotations[index]
         img = cv2.imread(img_id, cv2.IMREAD_COLOR)
         height, width, _ = img.shape
-
+        img_info = [width, height]
         # if self.target_transform is not None:
         #     target = self.target_transform(target)
 
         if self.transform is not None:
             img, target = self.transform(img, target)
 
-        return img, target
+        return img, target, img_info
 
     def __len__(self):
         return len(self.ids)
