@@ -106,8 +106,9 @@ class MultiBoxLoss(nn.Module):
                 num_neg = torch.clamp(
                 self.negpos_ratio * num_pos, max=pos.size(1) - 1)
             else:
+                fake_num_pos = torch.ones(32, 1).long() * 15
                 num_neg = torch.clamp(
-                self.negpos_ratio * 30, max=pos.size(1) - 1)
+                self.negpos_ratio * fake_num_pos, max=pos.size(1) - 1)
             neg = idx_rank < num_neg.expand_as(idx_rank)
 
             # Confidence Loss Including Positive and Negative Examples
@@ -129,7 +130,7 @@ class MultiBoxLoss(nn.Module):
             loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
             N = num_pos.data.sum()
         else:
-            loss_l = 0
+            loss_l = torch.zeros(1)
             N = 1.0
         loss_l /= float(N)
         loss_c /= float(N)

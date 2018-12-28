@@ -145,18 +145,19 @@ class RefineMultiBoxLoss(nn.Module):
             _, loss_idx = loss_c.sort(1, descending=True)
             _, idx_rank = loss_idx.sort(1)
             num_pos = pos.long().sum(1, keepdim=True)
+
             if num_pos.data.sum() > 0:
                 num_neg = torch.clamp(
                 self.negpos_ratio * num_pos, max=pos.size(1) - 1)
             else:
+                fake_num_pos = torch.ones(32, 1).long() * 15
                 num_neg = torch.clamp(
-                self.negpos_ratio * 30, max=pos.size(1) - 1)
+                self.negpos_ratio * fake_num_pos, max=pos.size(1) - 1)
             neg = idx_rank < num_neg.expand_as(idx_rank)
 
             # Confidence Loss Including Positive and Negative Examples
             pos_idx = pos.unsqueeze(2).expand_as(conf_data)
             neg_idx = neg.unsqueeze(2).expand_as(conf_data)
-
             conf_p = conf_data[(pos_idx + neg_idx).gt(0)].view(
                 -1, self.num_classes)
 
@@ -175,7 +176,7 @@ class RefineMultiBoxLoss(nn.Module):
             loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
             N = num_pos.data.sum()
         else:
-            loss_l = 0
+            loss_l = torch.zeros(1)
             N = 1.0
 
         loss_l /= float(N)
