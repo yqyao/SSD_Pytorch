@@ -25,7 +25,7 @@ class FocalLossSigmoid(nn.Module):
         alpha_mask = self.alpha * targets
         loss_pos = -1. * torch.pow(
             1 - P, self.gamma) * torch.log(P) * targets * alpha_mask
-        loss_neg = -1. * torch.pow(1 - P, self.gamma) * torch.log(1 - P) * (
+        loss_neg = -1. * torch.pow(P, self.gamma) * torch.log(1 - P) * (
             1 - targets) * (1 - alpha_mask)
         batch_loss = loss_neg + loss_pos
         if self.size_average:
